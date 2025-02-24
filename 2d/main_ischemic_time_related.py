@@ -10,14 +10,18 @@ from mpi4py import MPI
 from petsc4py import PETSc
 import pyvista
 import matplotlib.pyplot as plt
-from helper_function import G_tau, delta_tau, delta_deri_tau, OuterBoundary1, OuterBoundary2, compare_CM
+
+import sys
+sys.path.append('.')
+from utils.helper_function import delta_tau, delta_deri_tau, compute_error, petsc2array, eval_function
 
 # mesh of Body
-domain, cell_markers, facet_markers = gmshio.read_from_msh("2d/heart_torso.msh", MPI.COMM_WORLD, gdim=2)
+file = "2d/data/heart_torso.msh"
+domain, cell_markers, facet_markers = gmshio.read_from_msh(file, MPI.COMM_WORLD, gdim=2)
 tdim = domain.topology.dim
 # mesh of Heart
 subdomain, sub_to_parent, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
-sub_node_num = subdomain.topology.index_map(tdim-2).size_local
+sub_node_num = subdomain.topology.index_map(0).size_local
 
 # function space
 V1 = functionspace(domain, ("Lagrange", 1))
@@ -28,45 +32,52 @@ V2 = functionspace(subdomain, ("Lagrange", 1))
 # M0 : conductivity tensor in Torso
 # M  : Mi + Me in Heart 
 #      M0 in Torso
+
+sigma_t = 0.8
+sigma_i = 0.4
+sigma_e = 0.8
+
 def rho1(x):
-    tensor = np.eye(2) * 2
+    tensor = np.eye(tdim) * sigma_t
     values = np.repeat(tensor, x.shape[1])
     return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
 def rho2(x):
-    tensor = np.eye(2)
+    tensor = np.eye(tdim) * (sigma_i + sigma_e)
     values = np.repeat(tensor, x.shape[1])
     return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
-V = functionspace(domain, ("DG", 0, (2,2)))
+V = functionspace(domain, ("DG", 0, (tdim, tdim)))
 M = Function(V)
 M.interpolate(rho1, cell_markers.find(1))
 M.interpolate(rho2, cell_markers.find(2))
-# M = Constant(domain, default_scalar_type(np.eye(tdim)))
-Mi = Constant(domain, default_scalar_type(np.eye(tdim)))
+Mi = Constant(subdomain, default_scalar_type(np.eye(tdim)*sigma_i))
 
-# parameter a2 a1 a0 tau
-a1 = -85
-a2 = -25
-a3 = 15
+# parameter a1 a2 a3 a4 tau
+a1 = -90 # no active no ischemia
+a2 = -60 # no active ischemia
+a3 = 20 # active no ischemia
+a4 = -10 # active ischemia
 tau = 0.3
-alpha1 = 1e-3
-alpha2 = 1e-5
+# alpha1 = 1e-3
+# alpha2 = 1e-5
+
 # phi G_phi delta_phi delta_deri_phi
 phi_1 = Function(V2)
 phi_2 = Function(V2)
-phi_1_prior = Function(V2)
-phi_2_prior = Function(V2)
+# phi_1_prior = Function(V2)
+# phi_2_prior = Function(V2)
 G_phi_1 = Function(V2)
 G_phi_2 = Function(V2)
 delta_phi_1 = Function(V2)
 delta_phi_2 = Function(V2)
 delta_deri_phi_1 = Function(V2)
 delta_deri_phi_2 = Function(V2)
+
 u = Function(V1)
 w = Function(V1)
 # function d
 d = Function(V1)
 # define d's value on the boundary
-d_all_time = np.load(file='2d/bsp_all_time.npy')
+d_all_time = np.load(file='2d/data/bsp_all_time.npy')
 time_total = np.shape(d_all_time)[0]
 
 # matrix A_u
