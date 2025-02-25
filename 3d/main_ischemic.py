@@ -148,8 +148,8 @@ with b_u.localForm() as loc_b:
 assemble_vector(b_u, linear_form_b_u)
 solver.solve(b_u, u.vector)
 # adjust u
-c = assemble_scalar(form_c1)/assemble_scalar(form_c2)
-u.x.array[:] = u.x.array + c
+adjustment = assemble_scalar(form_c1)/assemble_scalar(form_c2)
+u.x.array[:] = u.x.array + adjustment
 
 loss_per_iter = []
 cm_cmp_per_iter = []
@@ -203,12 +203,12 @@ while (k < 1e2):
         assemble_vector(b_u, linear_form_b_u)
         solver.solve(b_u, u.vector)
         # adjust u
-        c = assemble_scalar(form_c1) / assemble_scalar(form_c2)
-        u.x.array[:] = u.x.array + c
+        adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+        u.x.array[:] = u.x.array + adjustment
         # compute loss
-        J = assemble_scalar(form_loss_1) 
+        J = assemble_scalar(form_loss_1)
         # J = J + assemble_scalar(form_loss_2)
-        phi_val_on_submesh = eval_function(phi, subdomain_ventricle.geometry.x)
+        # phi_val_on_submesh = eval_function(phi, subdomain_ventricle.geometry.x)
         # J = J + regularization_parameter * (phi_val_on_submesh.T@LTL_matrix@phi_val_on_submesh)
         J_cmp = J - (loss - c * alpha * np.linalg.norm(J_p_array)**2)
         if (J_cmp < 1e-2):

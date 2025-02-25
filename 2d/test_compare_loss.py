@@ -1,7 +1,7 @@
 # compute potential u in B from transmembrane potential v
 from dolfinx import default_scalar_type
 from dolfinx.io import gmshio
-from dolfinx.fem import functionspace, form, Constant, Function
+from dolfinx.fem import functionspace, form, Constant, Function, assemble_scalar
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
 from dolfinx.mesh import create_submesh
 from dolfinx.plot import vtk_mesh
@@ -82,19 +82,14 @@ a4 = -10 # active ischemia
 tau = 0.3
 time_total = 41
 
-phi_1_exact = phi1_exact_solution(4, 6, 2)
-phi_2_exact = phi2_exact_solution(4, 4, 0)
 phi_1 = Function(V2)
-phi_1.interpolate(phi_1_exact)
 phi_2 = Function(V2)
-
 delta_phi_1 = Function(V2)
 delta_phi_2 = Function(V2)
-delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
-
 G_phi_1 = Function(V2)
-G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
 G_phi_2 = Function(V2)
+
+phi_2_exact = phi2_exact_solution(4, 4, 0)
 
 # A_u u = b_u
 # matrix A
@@ -121,49 +116,75 @@ entity_map = {domain._cpp_object: sub_to_parent}
 linear_form_b_u = form(b_u_element, entity_maps=entity_map)
 b_u = create_vector(linear_form_b_u)
 
-u = Function(V1)
-u_all_time = np.zeros((time_total, num_node))
-phi_2_all_time = np.zeros((time_total, sub_node_num))
-v_exact_all_time = np.zeros((time_total, sub_node_num))
+u1 = Function(V1)
+u2 = Function(V1)
+ds = Measure('ds', domain = domain)
+loss_element = 0.5 * (u1 - u2) ** 2 * ds
+form_loss = form(loss_element)
 
-for t in range(time_total):
-    phi_2_exact.t = t
-    phi_2.interpolate(phi_2_exact)
-    G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
-    delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
-    with b_u.localForm() as loc_b:
-        loc_b.set(0)
-    assemble_vector(b_u, linear_form_b_u)
-    solver.solve(b_u, u.vector)
-    phi_2_all_time[t] = phi_2.x.array.copy()
-    u_all_time[t] = u.x.array.copy()
-    v_exact_all_time[t] = (a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +\
-                        (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array)
+# result d
+# phi_1.x.array[:] = np.load('2d/data/phi_1_result.npy')
+# delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
+# G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+# phi_2.x.array[:] = np.load('2d/data/phi_2_result.npy')
+# delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+# G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
+# with b_u.localForm() as loc_b:
+#     loc_b.set(0)
+# assemble_vector(b_u, linear_form_b_u)
+# solver.solve(b_u, u1.vector)
 
-np.save('2d/data/bsp_all_time', u_all_time)
-np.save('2d/data/phi_1', phi_1.x.array)
-np.save('2d/data/phi_2_all_time', phi_2_all_time)
-np.save('2d/data/v_exat_all_time.npy', v_exact_all_time)
+# exact d
+phi_1.x.array[:] = np.load('2d/data/phi_1_exact.npy')
+delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
+G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+phi_2.interpolate(phi_2_exact)
+delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
+with b_u.localForm() as loc_b:
+    loc_b.set(0)
+assemble_vector(b_u, linear_form_b_u)
+solver.solve(b_u, u1.vector)
 
-v = Function(V2)
-plotter = pyvista.Plotter(shape=(2, 5))
-for i in range(2):
-    for j in range(5):
+# no ischemia d
+phi_1.interpolate(phi1_exact_solution(4,6,0))
+delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
+G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+phi_2.interpolate(phi_2_exact)
+delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
+with b_u.localForm() as loc_b:
+    loc_b.set(0)
+assemble_vector(b_u, linear_form_b_u)
+solver.solve(b_u, u2.vector)
+
+c1_element = (u1-u2) * ds
+c2_element = 1 * ds
+form_c1 = form(c1_element)
+form_c2 = form(c2_element)
+adjustment = assemble_scalar(form_c1)/assemble_scalar(form_c2)
+u2.x.array[:] = u2.x.array + adjustment
+
+print('difference in d:', assemble_scalar(form_loss))
+
+grid0 = pyvista.UnstructuredGrid(*vtk_mesh(domain, tdim))
+grid0.point_data["u1"] = eval_function(u1, domain.geometry.x)
+grid0.set_active_scalars("u1")
+
+grid1 = pyvista.UnstructuredGrid(*vtk_mesh(domain, tdim))
+grid1.point_data["u2"] = eval_function(u2, domain.geometry.x)
+grid1.set_active_scalars("u2")
+
+grid2 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
+grid2.point_data["u2"] = eval_function(phi_1, domain.geometry.x)
+grid1.set_active_scalars("u2")
+grid = (grid0, grid1)
+
+plotter = pyvista.Plotter(shape=(1, 2))
+for i in range(1):
+    for j in range(2):
         plotter.subplot(i, j)
-        grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-        v.x.array[:] = v_exact_all_time[i*20 + j*5]
-        grid.point_data["v"] = eval_function(v, subdomain.geometry.x)
-        grid.set_active_scalars("v")
-        # grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-        # phi_2.x.array[:] = phi_2_all_time[i*20 + j*5]
-        # grid.point_data["phi_2"] = eval_function(phi_2, subdomain.geometry.x)
-        # grid.set_active_scalars("phi_2")
-        # grid = pyvista.UnstructuredGrid(*vtk_mesh(domain, tdim))
-        # u.x.array[:] = u_all_time[i*20 + j*5]
-        # grid.point_data["u"] = eval_function(u, domain.geometry.x)
-        # grid.set_active_scalars("u")
-        plotter.add_mesh(grid, show_edges=True)
-        plotter.add_text(f"Time: {i*20 + j*5:.1f} ms")
+        plotter.add_mesh(grid[i+j], show_edges=True)
         plotter.view_xy()
         plotter.add_axes()
 plotter.show()

@@ -1,19 +1,21 @@
+import sys
+
 from dolfinx import default_scalar_type
 from dolfinx.io import gmshio
 from dolfinx.fem import functionspace, form, Constant, Function, assemble_scalar
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
-from dolfinx.mesh import create_submesh, locate_entities_boundary, meshtags
+from dolfinx.mesh import create_submesh
 from dolfinx.plot import vtk_mesh
-import numpy as np
 from ufl import TestFunction, TrialFunction, dot, grad, Measure
 from mpi4py import MPI
 from petsc4py import PETSc
+from helper_function import compare_CM
+import numpy as np
 import pyvista
 import matplotlib.pyplot as plt
 
-import sys
 sys.path.append('.')
-from utils.helper_function import delta_tau, delta_deri_tau, compute_error, petsc2array, eval_function
+from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function
 
 # mesh of Body
 file = "2d/data/heart_torso.msh"
@@ -27,12 +29,11 @@ sub_node_num = subdomain.topology.index_map(0).size_local
 V1 = functionspace(domain, ("Lagrange", 1))
 V2 = functionspace(subdomain, ("Lagrange", 1))
 
-# Mi : intra-cellular conductivity tensor in Heart
-# Me : extra-cellular conductivity tensor in Heart
-# M0 : conductivity tensor in Torso
-# M  : Mi + Me in Heart 
-#      M0 in Torso
-
+# sigma_i : intra-cellular conductivity tensor in Heart
+# sigma_e : extra-cellular conductivity tensor in Heart
+# sigma_t : conductivity tensor in Torso
+# M  : sigma_i + sigma_e in Heart 
+#      sigma_t in Torso
 sigma_t = 0.8
 sigma_i = 0.4
 sigma_e = 0.8
@@ -54,7 +55,7 @@ Mi = Constant(subdomain, default_scalar_type(np.eye(tdim)*sigma_i))
 # parameter a1 a2 a3 a4 tau
 a1 = -90 # no active no ischemia
 a2 = -60 # no active ischemia
-a3 = 20 # active no ischemia
+a3 = 20  # active no ischemia
 a4 = -10 # active ischemia
 tau = 0.3
 # alpha1 = 1e-3
@@ -83,7 +84,7 @@ time_total = np.shape(d_all_time)[0]
 # matrix A_u
 u1 = TestFunction(V1)
 v1 = TrialFunction(V1)
-dx1 = Measure("dx", domain=domain)
+dx1 = Measure("dx", domain = domain)
 a_u = dot(grad(u1), dot(M, grad(v1)))*dx1
 bilinear_form_a = form(a_u)
 A_u = assemble_matrix(bilinear_form_a)
@@ -91,145 +92,160 @@ A_u.assemble()
 
 solver = PETSc.KSP().create()
 solver.setOperators(A_u)
-solver.setType(PETSc.KSP.Type.PREONLY)
-solver.getPC().setType(PETSc.PC.Type.LU)
+solver.setType(PETSc.KSP.Type.GMRES)
+solver.getPC().setType(PETSc.PC.Type.HYPRE)
 
 # vector b_u
-dx2 = Measure("dx", domain=subdomain)
-b_u_element = (a2-a3) * delta_phi_1 * G_phi_2 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 + \
-        (a2-a3) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 + \
-        (a1-a2) * delta_phi_2 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2
+dx2 = Measure("dx", domain = subdomain)
+b_u_element = -(a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 +\
+        -(a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 +\
+        -(a3 - a4) * delta_phi_1 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 +\
+        -(a2 - a4) * delta_phi_2 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2
 entity_map = {domain._cpp_object: sub_to_parent}
-linear_form_b_u = form(b_u_element, entity_maps=entity_map)
+linear_form_b_u = form(b_u_element, entity_maps = entity_map)
 b_u = create_vector(linear_form_b_u)
 
-# outerBoundary
-facets = locate_entities_boundary(domain, tdim - 1, OuterBoundary1)
-facet_indices = np.array(facets, dtype=np.int32)
-facet_values = np.full(len(facet_indices), 1, dtype=np.int32)
-facet_tags = meshtags(domain, tdim - 1, facet_indices, facet_values)
-ds_out = Measure('ds', domain=domain, subdomain_data=facet_tags, subdomain_id=1)
-
 # scalar c
-c1_element = (d-u) * ds_out
-c2_element = 1 * ds_out
+ds = Measure('ds', domain = domain)
+c1_element = (d-u) * ds
+c2_element = 1 * ds
 form_c1 = form(c1_element)
 form_c2 = form(c2_element)
 
 # scalar loss
-loss_element_1 = 0.5 * (u - d) ** 2 * ds_out
-loss_element_2 = 0.5 * alpha1 * (phi_1 - phi_1_prior) ** 2 * dx2 \
-    + 0.5 * alpha2 * (phi_2 - phi_2_prior) ** 2 * dx2 \
-    + 0.5 * alpha1 * dot(grad(phi_1 - phi_1_prior), grad(phi_1 - phi_1_prior)) * dx2 \
-    + 0.5 * alpha2 * dot(grad(phi_2 - phi_2_prior), grad(phi_2 - phi_2_prior)) * dx2
+loss_element_1 = 0.5 * (u - d) ** 2 * ds
+# loss_element_2 = 0.5 * alpha1 * (phi_1 - phi_1_prior) ** 2 * dx2 \
+#     + 0.5 * alpha2 * (phi_2 - phi_2_prior) ** 2 * dx2 \
+#     + 0.5 * alpha1 * dot(grad(phi_1 - phi_1_prior), grad(phi_1 - phi_1_prior)) * dx2 \
+#     + 0.5 * alpha2 * dot(grad(phi_2 - phi_2_prior), grad(phi_2 - phi_2_prior)) * dx2
 form_loss_1 = form(loss_element_1)
-form_loss_2 = form(loss_element_2)
+# form_loss_2 = form(loss_element_2)
 
 # vector b_w
-b_w_element = u1 * (u - d) * ds_out
+b_w_element = u1 * (u - d) * ds
 linear_form_b_w = form(b_w_element)
 b_w = create_vector(linear_form_b_w)
 
 # vector direction p
 u2 = TestFunction(V2)
-j_p = (a2-a3) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 + \
-        (a2-a3) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 + \
-        (a2-a3) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 + \
-        alpha1 * (phi_1 - phi_1_prior) * u2 * dx2 \
-        + alpha1 * dot(grad(phi_1 - phi_1_prior), grad(u2)) * dx2
+j_p = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 +\
+        -(a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 +\
+        -(a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 +\
+        -(a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 +\
+        -(a3 - a4) * delta_phi_1 * (1 - G_phi_2) * dot(grad(w), dot(Mi, grad(u2))) * dx2
 form_J_p = form(j_p, entity_maps=entity_map)
 J_p = create_vector(form_J_p)
 
 # vector direction q
-j_q = (a2-a3) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 + \
-        (a2-a3) * G_phi_1 * delta_deri_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 + \
-        (a1-a2) * delta_deri_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 + \
-        (a2-a3) * G_phi_1 * delta_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 + \
-        (a1-a2) * delta_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 + \
-        alpha2 * (phi_2 - phi_2_prior) * u2 * dx2 \
-        + alpha2 * dot(grad(phi_2 - phi_2_prior), grad(u2)) * dx2
-form_J_q = form(j_p, entity_maps=entity_map)
+j_q = -(a1 - a2 -a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 +\
+        -(a1 - a3) * delta_deri_phi_2 * G_phi_1 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 +\
+        -(a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 +\
+        -(a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 +\
+        -(a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2
+form_J_q = form(j_q, entity_maps=entity_map)
 J_q = create_vector(form_J_q)
 
-# step 1
-step1 = np.full(sub_node_num, 0.3)
-sub_domain_boundary = locate_entities_boundary(subdomain, tdim - 2, OuterBoundary2)
-step1[sub_domain_boundary] = 0.1
-step1 = np.diag(step1)
-# step 2
-step2 = np.full(sub_node_num, 0.8)
-step2[sub_domain_boundary] = 0.2
-step2 = np.diag(step2)
-
 # phi_2_prior
-phi_2_prior.x.array[:] = np.ones(sub_node_num) * tau/2
-phi_2_all_time = np.load('2d/phi_2_all_time.npy')
+# phi_2_prior.x.array[:] = np.ones(sub_node_num) * tau/2
 
-# initial phi_1
+# exact phi_1 phi_2
 phi_1_exact = Function(V2)
-phi_1_exact.x.array[:] = np.load(file='2d/phi_1.npy')
+phi_1_exact.x.array[:] = np.load(file='2d/data/phi_1.npy')
+phi_2_exact_all_time = np.load('2d/data/phi_2_all_time.npy')
+
+# initial phi_1 phi_2
 phi_0 = np.full(phi_1.x.array.shape, tau/2)
 phi_1.x.array[:] = phi_0
-
-# initial phi_2
 phi_2.x.array[:] = phi_0
 
 # phi result
 phi_1_result = np.zeros((time_total, sub_node_num))
 phi_2_result = np.zeros((time_total, sub_node_num))
 
-cm_per_timeframe = []
+cm_phi_1_per_timeframe = []
+cm_phi_2_per_timeframe = []
 loss_per_timeframe = []
 
 for timeframe in range(time_total):
-    k = 0
-    phi_1_prior.x.array[:] = phi_1.x.array
-    phi_2_prior.x.array[:] = phi_2.x.array
+    # phi_1_prior.x.array[:] = phi_1.x.array
+    # phi_2_prior.x.array[:] = phi_2.x.array
+
     # define d's value on the boundary
     d.x.array[:] = d_all_time[timeframe]
-    while (k < 1e2):
-        G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
-        G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
-        delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
-        delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
-        delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
-        delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
-        
-        # get u from p, q
-        with b_u.localForm() as loc_b:
-            loc_b.set(0)
-        assemble_vector(b_u, linear_form_b_u)
-        solver.solve(b_u, u.vector)
-        
-        # adjust u
-        c = assemble_scalar(form_c1)/assemble_scalar(form_c2)
-        u.x.array[:] = u.x.array + c
+    # phi_1.x.array[:] = phi_1_exact.x.array
+    # phi_2.x.array[:] = phi_2_exact_all_time[timeframe]
 
-        # get w from u
+    G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+    G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
+    delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
+    delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+    delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
+    delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
+
+    # get u from p, q
+    with b_u.localForm() as loc_b:
+        loc_b.set(0)
+    assemble_vector(b_u, linear_form_b_u)
+    solver.solve(b_u, u.vector)
+    # adjust u
+    adjustment = assemble_scalar(form_c1)/assemble_scalar(form_c2)
+    u.x.array[:] = u.x.array + adjustment
+
+    k = 0
+    while (k < 1e2):
+       # get w from u
         with b_w.localForm() as loc_w:
             loc_w.set(0)
         assemble_vector(b_w, linear_form_b_w)
         solver.solve(b_w, w.vector)
-
-        # compute partial derivative of p
+        # compute partial derivative of p q
         with J_p.localForm() as loc_J:
             loc_J.set(0)
         assemble_vector(J_p, form_J_p)
-        # compute partial derivative of q
         with J_q.localForm() as loc_J:
             loc_J.set(0)
         assemble_vector(J_q, form_J_q)
+        # cost function
+        loss = assemble_scalar(form_loss_1)
+
         # check if the condition is satisfie
-        loss_1 = assemble_scalar(form_loss_1)
-        loss_2 = assemble_scalar(form_loss_2)
-        loss = loss_1 + loss_2
-        if (loss < 1e1 and np.linalg.norm(J_p.array) < 4e0 and np.linalg.norm(J_q.array) < 4e0):
-             break
+        if (np.linalg.norm(J_p.array) < 1e0 and np.linalg.norm(J_q.array) < 1e0):
+            break
         
-        # updata p from partial derivative
-        phi_1.x.array[:] = phi_1.x.array - step1@(J_p.array/np.linalg.norm(J_p.array))
-        phi_2.x.array[:] = phi_2.x.array - step2@(J_q.array/np.linalg.norm(J_q.array))
+        # line search
+        phi_1_v = phi_1.x.array[:].copy()
+        phi_2_v = phi_2.x.array[:].copy()
+        J_p_array = J_p.array.copy()
+        J_q_array = J_q.array.copy()
+        alpha = 1
+        gamma = 0.5
+        c = 0.1
+        while(True):
+            # adjust p q
+            phi_1.x.array[:] = phi_1_v - alpha * J_p_array
+            phi_2.x.array[:] = phi_2_v - alpha * J_q_array
+            # get u from p, q
+            G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+            G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
+            delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
+            delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+            delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
+            delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
+            with b_u.localForm() as loc_b:
+                loc_b.set(0)
+            assemble_vector(b_u, linear_form_b_u)
+            solver.solve(b_u, u.vector)
+            # adjust u
+            adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+            u.x.array[:] = u.x.array + adjustment
+            # compute loss
+            J = assemble_scalar(form_loss_1)
+            J_cmp = J - (loss - c * alpha * np.linalg.norm(np.concatenate((J_p_array, J_q_array)))**2)
+            if (J_cmp < 1e-1):
+                break
+            alpha = gamma * alpha
         k = k + 1
+
     print('timeframe:', timeframe)
     print('end at', k, 'iteration')
     print('J_p:', np.linalg.norm(J_p.array))
@@ -237,8 +253,12 @@ for timeframe in range(time_total):
     print('loss:', loss)
     phi_1_result[timeframe] = phi_1.x.array
     phi_2_result[timeframe] = phi_2.x.array
-    cm_per_timeframe.append(compare_CM(subdomain, phi_1_exact, phi_1))
+    cm_phi_1_per_timeframe.append(compare_CM(subdomain, phi_1_exact, phi_1))
     loss_per_timeframe.append(loss)
+
+# np.save('2d/data/phi_1_result.npy', phi_1.x.array)
+# np.save('2d/data/phi_2_result.npy',phi_2.x.array)
+# np.save('2d/data/phi_1_exact.npy', phi_1_exact.x.array)
 
 # check result
 marker_exact = np.zeros(sub_node_num)
@@ -252,7 +272,7 @@ marker_result[phi_1.x.array < 0] = 1
 # print(compare_CM(subdomain, phi_1_exact, phi_1_average))
 
 plt.subplot(1, 2, 1)
-plt.plot(cm_per_timeframe)
+plt.plot(cm_phi_1_per_timeframe)
 plt.title('error in center of mass')
 plt.xlabel('time')
 plt.subplot(1, 2, 2)
@@ -261,32 +281,37 @@ plt.title('cost functional')
 plt.xlabel('time')
 plt.show()
 
+marker = Function(V2)
 grid0 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-grid0.point_data["marker_exact"] = marker_exact
+marker.x.array[:] = marker_exact
+grid0.point_data["marker_exact"] = eval_function(marker, subdomain.geometry.x)
 grid0.set_active_scalars("marker_exact")
 grid1 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-grid1.point_data["marker_reult"] = marker_result
+marker.x.array[:] = marker_result
+grid1.point_data["marker_reult"] = eval_function(marker, subdomain.geometry.x)
 grid1.set_active_scalars("marker_reult")
-grid2 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-grid2.point_data["phi_1_exact"] = phi_1_exact.x.array
-grid2.set_active_scalars("phi_1_exact")
-grid3 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-grid3.point_data["phi_1_result"] = phi_1.x.array
-grid3.set_active_scalars("phi_1_result")
-grid4 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-grid4.point_data["phi_2_exact"] = phi_2_all_time[time_total-1]
-grid4.set_active_scalars("phi_2_exact")
-grid5 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-grid5.point_data["phi_2_result"] = phi_2.x.array
-grid5.set_active_scalars("phi_2_result")
+# grid2 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
+# grid2.point_data["phi_1_exact"] = eval_function(phi_1_exact, subdomain.geometry.x)
+# grid2.set_active_scalars("phi_1_exact")
+# grid3 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
+# grid3.point_data["phi_1_result"] = eval_function(phi_1, subdomain.geometry.x)
+# grid3.set_active_scalars("phi_1_result")
+# grid4 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
+# marker.x.array[:] = phi_2_exact_all_time[time_total-1]
+# grid4.point_data["phi_2_exact"] = eval_function(marker, subdomain.geometry.x)
+# grid4.set_active_scalars("phi_2_exact")
+# grid5 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
+# grid5.point_data["phi_2_result"] = eval_function(phi_2, subdomain.geometry.x)
+# grid5.set_active_scalars("phi_2_result")
 
-grid = (grid0, grid2, grid4, grid1, grid3, grid5)
+# grid = (grid0, grid2, grid4, grid1, grid3, grid5)
 
-plotter = pyvista.Plotter(shape=(2, 3))
-for i in range(2):
-    for j in range(3):
+grid = (grid0, grid1)
+plotter = pyvista.Plotter(shape=(1, 2))
+for i in range(1):
+    for j in range(2):
         plotter.subplot(i, j)
-        plotter.add_mesh(grid[i*3+j], show_edges=True)
+        plotter.add_mesh(grid[i+j], show_edges=True)
         plotter.view_xy()
         plotter.add_axes()
 plotter.show()
