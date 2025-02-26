@@ -38,10 +38,7 @@ def create_mesh(target_file, lc, multi_flag=True):
     geom_rcav_pts = np.array(geom_rcav['pts'])
 
     def model_made_points(p, pindex):
-        if lc == None:
-            points = [gmsh.model.occ.addPoint(*pt) for pt in p]
-        else:
-            points = [gmsh.model.occ.addPoint(*pt, lc) for pt in p]
+        points = [gmsh.model.occ.addPoint(*pt, lc) for pt in p]
         lines = np.zeros([len(pindex), len(pindex[0])])
         edges = {}
         for i in range(len(pindex)):
@@ -88,6 +85,23 @@ def create_mesh(target_file, lc, multi_flag=True):
         gmsh.model.addPhysicalGroup(3, [7], 1)  # Torso as physical group 1
         gmsh.model.addPhysicalGroup(3, [model_ventricle], 2)  # Heart as physical group 2
 
+    # mesh size
+    lc_ventricle = lc / 4
+    lc_other = lc
+
+    # 创建 Box 尺寸场，使 model_ventricle 具有更细网格
+    gmsh.model.mesh.field.add("Box", 1)
+    gmsh.model.mesh.field.setNumber(1, "VIn", lc_ventricle)
+    gmsh.model.mesh.field.setNumber(1, "VOut", lc_other)
+    gmsh.model.mesh.field.setNumber(1, "XMin", min(geom_ventricle_pts[:, 0]))
+    gmsh.model.mesh.field.setNumber(1, "XMax", max(geom_ventricle_pts[:, 0]))
+    gmsh.model.mesh.field.setNumber(1, "YMin", min(geom_ventricle_pts[:, 1]))
+    gmsh.model.mesh.field.setNumber(1, "YMax", max(geom_ventricle_pts[:, 1]))
+    gmsh.model.mesh.field.setNumber(1, "ZMin", min(geom_ventricle_pts[:, 2]))
+    gmsh.model.mesh.field.setNumber(1, "ZMax", max(geom_ventricle_pts[:, 2]))
+
+    gmsh.model.mesh.field.setAsBackgroundMesh(1)
+
     gmsh.model.mesh.generate(3)
     gmsh.write(target_file)
     # log = "\n".join(gmsh.logger.get())
@@ -97,6 +111,6 @@ def create_mesh(target_file, lc, multi_flag=True):
     gmsh.finalize()
 
 if __name__ == '__main__':
-    lc = 10
+    lc = 20
     file = '3d/data/mesh_multi_conduct_ecgsim.msh'
     create_mesh(file, lc)

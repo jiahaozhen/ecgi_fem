@@ -6,12 +6,12 @@ from dolfinx.plot import vtk_mesh
 from dolfinx.fem import functionspace, Function
 from mpi4py import MPI
 import pyvista
-from reaction_diffusion.main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
+from main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
 
 sys.path.append('.')
 from utils.helper_function import eval_function
 
-submesh_flag = False
+submesh_flag = True
 if submesh_flag:
     mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
     # mesh of Body
@@ -26,7 +26,8 @@ else:
 
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
-u_data = compute_v_based_on_reaction_diffusion(mesh_file)
+u_data = compute_v_based_on_reaction_diffusion(
+    mesh_file, submesh_flag=submesh_flag, ischemia_flag=True)
 
 plotter = pyvista.Plotter()
 grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))

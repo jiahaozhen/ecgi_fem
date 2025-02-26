@@ -8,8 +8,8 @@ from petsc4py import PETSc
 
 import numpy as np
 
-def compute_v_based_on_reaction_diffusion(mesh_file, T=200, step_per_timeframe=5, 
-                                          submesh_flag=False, ischemia_flag=False):
+def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe = 5, 
+                                          submesh_flag = False, ischemia_flag = False):
     if submesh_flag:
         # mesh of Body
         domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
@@ -29,7 +29,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T=200, step_per_timeframe=5
     tau_out = 10
     tau_open = 130
     tau_close = 150
-    u_crit = 0.13
+    u_crit = 0.3
 
     # A simple two-variable model of cardiac excitation
     # D = 4
@@ -47,25 +47,60 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T=200, step_per_timeframe=5
 
     V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 
-    def initial_condition(x):
-        return np.where((x[0]-61.8)**2+(x[1]-60.9)**2+(x[2]-26.8)**2 < 25, 1, 0)
+    # assume node 17 is the center of ischemia 
+    # radius = 30
+    # node 17 coordinates: (89.1, 40.9, -13.3)
+    node_17 = np.array([89.1, 40.9, -13.3])
+    class ischemia_condition():
+        def __init__(self, u_ischemic, u_healthy, ischemia_center = node_17, radius = 30):
+            self.u_ischemic = u_ischemic
+            self.u_healthy = u_healthy
+            self.ischemia_center = ischemia_center
+            self.radius = radius
+        def __call__(self, x):
+            return np.where((x[0]-self.ischemia_center[0])**2 + 
+                            (x[1]-self.ischemia_center[1])**2 +
+                            (x[2]-self.ischemia_center[2])**2 < self.radius**2, 
+                            self.u_ischemic, self.u_healthy)
+    
+    # the earliest node: 146
+    # node 146 coordinates: (57, 51.2, 15)
+    node_146 = np.array([57, 51.2, 15])
+    class activation_initial_condition():
+        def __init__(self, start = node_146, radius = 5):
+            self.start = start
+            self.radius = radius
+        def __call__(self, x):
+            return np.where((x[0]-self.start[0])**2 + 
+                            (x[1]-self.start[1])**2 +
+                            (x[2]-self.start[2])**2 < self.radius**2,
+                            1, 0)
 
+    if ischemia_flag:
+        u_peak = Function(V)
+        u_peak.interpolate(ischemia_condition(0.8, 1))
+        u_rest = Function(V)
+        u_rest.interpolate(ischemia_condition(0.2, 0))
+    else:
+        u_peak = 1
+        u_rest = 0
+    
     u_n = Function(V)
-    u_n.name = "u_n"
-    u_n.interpolate(initial_condition)
+    u_n.interpolate(activation_initial_condition())
 
     v_n = Function(V)
-    v_n.name = "v_n"
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
 
     uh = Function(V)
-    uh.name = "uh"
-    uh.interpolate(initial_condition)
+    uh.interpolate(activation_initial_condition())
 
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)
     a_u = u * v * dx1 + dt * D * dot(grad(u), grad(v)) * dx1
-    L_u = u_n * v * dx1  + dt * (v_n * (1 - u_n) * u_n * u_n / tau_in - u_n / tau_out) * v * dx1
+    if ischemia_flag:
+        L_u = u_n * v * dx1 + dt * (v_n * (u_peak - u_n) * (u_n - u_rest) * (u_n - u_rest) / tau_in - (u_n - u_rest) / tau_out) * v * dx1
+    else:
+        L_u = u_n * v * dx1 + dt * (v_n * (1 - u_n) * u_n * u_n / tau_in - u_n / tau_out) * v * dx1
     # L_u = u_n * v * dx1 + dt * (k * u_n * (u_n - a) * (1 - u_n) - u_n * v_n) * v * dx1
     # L_u = u_n * v * dx1 + dt * (c1 * u_n * (u_n - a) * (1 - u_n) - c2 * u_n * v_n) * v * dx1
 
