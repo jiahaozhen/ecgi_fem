@@ -1,4 +1,3 @@
-# compute potential u in B from transmembrane potential v
 import sys
 
 from dolfinx import default_scalar_type

@@ -192,3 +192,7 @@ def fspace2mesh(V):
             else:
                 fspace2mesh[idx_fspace] = idx_submesh
     return fspace2mesh
+
+def get_activation_time_from_v(v_data, threshold):
+    activation_time = np.argmax(v_data > threshold, axis=0)
+    return activation_time
