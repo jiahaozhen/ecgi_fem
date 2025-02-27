@@ -67,14 +67,25 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe
     # node 146 coordinates: (57, 51.2, 15)
     node_146 = np.array([57, 51.2, 15])
     class activation_initial_condition():
-        def __init__(self, start = node_146, radius = 5):
+        def __init__(self, u_peak_ischemic, u_peak_healthy, u_rest_ischemic, u_rest_healthy, start = node_146, radius_start = 5, ischemia_center = node_17, radius_ischemia = 30):
             self.start = start
-            self.radius = radius
+            self.radius_start = radius_start
+            self.ischemia_center = ischemia_center
+            self.radius_ischemia = radius_ischemia
+            self.u_peak_ischemic = u_peak_ischemic
+            self.u_peak_healthy = u_peak_healthy
+            self.u_rest_ischemic = u_rest_ischemic
+            self.u_rest_healthy = u_rest_healthy
         def __call__(self, x):
-            return np.where((x[0]-self.start[0])**2 + 
-                            (x[1]-self.start[1])**2 +
-                            (x[2]-self.start[2])**2 < self.radius**2,
-                            1, 0)
+            if ischemia_flag:
+                condition1 = (x[0]-self.start[0])**2 + (x[1]-self.start[1])**2 + (x[2]-self.start[2])**2 < self.radius_start**2
+                condition2 = (x[0]-self.ischemia_center[0])**2 + (x[1]-self.ischemia_center[1])**2 + (x[2]-self.ischemia_center[2])**2 < self.radius_ischemia**2
+                return np.where(condition1 & condition2, self.u_peak_ischemic,
+                                np.where( ~condition1 & condition2, self.u_rest_ischemic,
+                                            np.where( ~condition1 & ~condition2, self.u_rest_healthy, self.u_peak_healthy)))
+            else:
+                condition = (x[0]-self.start[0])**2 + (x[1]-self.start[1])**2 + (x[2]-self.start[2])**2 < self.radius_start**2
+                return np.where(condition, self.u_peak_healthy, self.u_rest_healthy)
 
     if ischemia_flag:
         u_peak = Function(V)
@@ -86,13 +97,13 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe
         u_rest = 0
     
     u_n = Function(V)
-    u_n.interpolate(activation_initial_condition())
+    u_n.interpolate(activation_initial_condition(0.8, 1, 0.2, 0))
 
     v_n = Function(V)
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
 
     uh = Function(V)
-    uh.interpolate(activation_initial_condition())
+    uh.interpolate(activation_initial_condition(0.8, 1, 0.2, 0))
 
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)

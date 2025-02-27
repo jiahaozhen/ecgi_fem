@@ -12,6 +12,7 @@ sys.path.append('.')
 from utils.helper_function import eval_function
 
 submesh_flag = True
+ischemia_flag = True
 if submesh_flag:
     mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
     # mesh of Body
@@ -27,7 +28,7 @@ else:
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
 u_data = compute_v_based_on_reaction_diffusion(
-    mesh_file, submesh_flag=submesh_flag, ischemia_flag=True)
+    mesh_file, T = 50, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag)
 
 plotter = pyvista.Plotter()
 grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
@@ -36,9 +37,12 @@ grid["u"] = eval_function(u, subdomain_ventricle.geometry.x)
 plotter.add_mesh(grid, scalars="u", cmap="viridis", clim=[0, 1])
 plotter.view_isometric()
 plotter.add_text('',name="time_text", font_size=18, color="red")
-plotter.open_gif("reaction_diffusion/u_data_3d.gif")
+if ischemia_flag:
+    plotter.open_gif("reaction_diffusion/u_data_3d_ischemia.gif")
+else:
+    plotter.open_gif("reaction_diffusion/u_data_3d_healthy.gif")
 
-t = 0.0
+t = 0
 time_step = 0.2
 for i in range(u_data.shape[0]):
     u.x.array[:] = u_data[i]
@@ -48,4 +52,4 @@ for i in range(u_data.shape[0]):
     plotter.write_frame()
     t += time_step
 
-plotter.show()
+plotter.close()
