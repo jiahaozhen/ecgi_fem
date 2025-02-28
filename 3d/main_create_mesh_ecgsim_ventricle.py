@@ -43,6 +43,6 @@ def create_mesh(target_file, lc):
     gmsh.finalize()
 
 if __name__ == '__main__':
-    lc = 10
+    lc = 3
     target_file = '3d/data/mesh_ecgsim_ventricle.msh'
     create_mesh(target_file, lc)

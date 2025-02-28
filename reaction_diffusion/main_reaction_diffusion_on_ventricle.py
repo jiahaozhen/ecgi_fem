@@ -6,6 +6,8 @@ from ufl import TrialFunction, TestFunction, dot, grad, Measure
 from mpi4py import MPI
 from petsc4py import PETSc
 
+import matplotlib.pyplot as plt
+
 import numpy as np
 
 def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe = 5, 
@@ -29,7 +31,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe
     tau_out = 10
     tau_open = 130
     tau_close = 150
-    u_crit = 0.3
+    u_crit = 0.13
 
     # A simple two-variable model of cardiac excitation
     # D = 4
@@ -67,7 +69,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe
     # node 146 coordinates: (57, 51.2, 15)
     node_146 = np.array([57, 51.2, 15])
     class activation_initial_condition():
-        def __init__(self, u_peak_ischemic, u_peak_healthy, u_rest_ischemic, u_rest_healthy, start = node_146, radius_start = 5, ischemia_center = node_17, radius_ischemia = 30):
+        def __init__(self, u_peak_ischemic, u_rest_ischemic, u_peak_healthy = 1, u_rest_healthy = 0, start = node_146, radius_start = 5, ischemia_center = node_17, radius_ischemia = 30):
             self.start = start
             self.radius_start = radius_start
             self.ischemia_center = ischemia_center
@@ -97,13 +99,13 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe
         u_rest = 0
     
     u_n = Function(V)
-    u_n.interpolate(activation_initial_condition(0.8, 1, 0.2, 0))
+    u_n.interpolate(activation_initial_condition(0.8, 0.2))
 
     v_n = Function(V)
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
 
     uh = Function(V)
-    uh.interpolate(activation_initial_condition(0.8, 1, 0.2, 0))
+    uh.interpolate(activation_initial_condition(0.8, 0.2))
 
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)
@@ -149,5 +151,26 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe
     return np.array(u_data)
 
 if __name__ == '__main__':
-    mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
-    v_data = compute_v_based_on_reaction_diffusion(mesh_file, 200)
+    submesh_flag = False
+    if submesh_flag:
+        mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
+        # mesh of Body
+        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
+        tdim = domain.topology.dim
+        # mesh of Heart
+        subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+    else:
+        mesh_file = '3d/data/mesh_ecgsim_ventricle.msh'
+        subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
+        tdim = subdomain_ventricle.topology.dim
+    v_data = compute_v_based_on_reaction_diffusion(mesh_file, T = 500, submesh_flag=submesh_flag, ischemia_flag=True)
+    # find the 2 point nearest to the center of ischemia
+    # node 17 coordinates: (89.1, 40.9, -13.3)
+    pts = subdomain_ventricle.geometry.x
+    center = np.array([89.1, 40.9, -13.3])
+    dist = np.linalg.norm(pts - center, axis=1)
+    idx = np.argsort(dist)
+    plt.plot(np.arange(0, v_data.shape[0]/5, 0.2), v_data[:, idx[0]])
+    plt.xlabel('Time (ms)')
+    # plt.plot(v_data[:, idx[1]])
+    plt.show()
