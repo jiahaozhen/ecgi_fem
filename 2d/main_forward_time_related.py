@@ -77,9 +77,9 @@ class phi2_exact_solution():
 # preparation 
 a1 = -90 # no active no ischemia
 a2 = -60 # no active ischemia
-a3 = 20 # active no ischemia
-a4 = -10 # active ischemia
-tau = 0.3
+a3 = 10 # active no ischemia
+a4 = -20 # active ischemia
+tau = 0.05
 time_total = 41
 
 phi_1_exact = phi1_exact_solution(4, 6, 2)
@@ -113,6 +113,8 @@ solver.getPC().setType(PETSc.PC.Type.LU)
 
 # vector b_u
 dx2 = Measure("dx",domain=subdomain)
+# v = Function(V2)
+# b_u_element = -dot(grad(u1), dot(Mi, grad(v))) * dx2
 b_u_element = -(a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 +\
         -(a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 +\
         -(a3 - a4) * delta_phi_1 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 +\
@@ -131,6 +133,9 @@ for t in range(time_total):
     phi_2.interpolate(phi_2_exact)
     G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
     delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+    # v.x.array[:] = (a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +\
+    #                 (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array)
+    # v_exact_all_time[t] = v.x.array.copy()
     with b_u.localForm() as loc_b:
         loc_b.set(0)
     assemble_vector(b_u, linear_form_b_u)

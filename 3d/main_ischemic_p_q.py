@@ -67,8 +67,8 @@ Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim)*sigma_i))
 
 # paramter
 a1 = -90 # no active no ischemia
-a2 = -60 # no active ischemia
-a3 = 20  # active no ischemia
+a2 = -70 # no active ischemia
+a3 = 10  # active no ischemia
 a4 = -10 # active ischemia
 tau = 1
 
@@ -87,7 +87,7 @@ u = Function(V1)
 w = Function(V1)
 d = Function(V1)
 # define d's value on the boundary
-d_all_time = np.load(file='3d/data/bsp_all_time.npy')
+d_all_time = np.load(file='3d/data/u_data_reaction_diffusion.npy')
 time_total = np.shape(d_all_time)[0]
 
 # matrix A_u
@@ -106,9 +106,9 @@ solver.getPC().setType(PETSc.PC.Type.HYPRE)
 
 # vector b_u
 dx2 = Measure("dx",domain = subdomain_ventricle)
-b_u_element = -(a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 +\
-        -(a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 +\
-        -(a3 - a4) * delta_phi_1 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 +\
+b_u_element = -(a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
+        -(a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 \
+        -(a3 - a4) * delta_phi_1 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
         -(a2 - a4) * delta_phi_2 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2
 entity_map = {domain._cpp_object: ventricle_to_torso}
 linear_form_b_u = form(b_u_element, entity_maps = entity_map)
@@ -132,25 +132,25 @@ b_w = create_vector(linear_form_b_w)
 
 # vector direction
 u2 = TestFunction(V2)
-j_p = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 +\
-        -(a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 +\
-        -(a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 +\
-        -(a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 +\
+j_p = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
+        -(a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
+        -(a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        -(a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
         -(a3 - a4) * delta_phi_1 * (1 - G_phi_2) * dot(grad(w), dot(Mi, grad(u2))) * dx2
 form_J_p = form(j_p, entity_maps = entity_map)
 J_p = create_vector(form_J_p)
 
-j_q = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 +\
-        -(a1 - a3) * delta_deri_phi_2 * G_phi_1 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 +\
-        -(a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 +\
-        -(a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 +\
+j_q = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
+        -(a1 - a3) * delta_deri_phi_2 * G_phi_1 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
+        -(a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        -(a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
         -(a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2
 form_J_q = form(j_q, entity_maps = entity_map)
 J_q = create_vector(form_J_q)
 
 # exact v
 v_exact = Function(V2)
-v_exact_all_time = np.load('3d/data/v_all_time.npy')
+v_exact_all_time = np.load('3d/data/v_data_reaction_diffusion.npy')
 
 #initial phi_1 phi_2
 phi_0 = np.full(phi_1.x.array.shape, tau/2)
@@ -203,7 +203,7 @@ for timeframe in range(time_total):
         loss = assemble_scalar(form_loss_1)
 
         # check if the condition is satisfie
-        if (np.linalg.norm(J_p.array) < 1e0 and np.linalg.norm(J_q.array) < 1e0):
+        if (np.linalg.norm(J_p.array) < 1e1 and np.linalg.norm(J_q.array) < 1e1):
              break
         
          # line search
@@ -247,16 +247,38 @@ for timeframe in range(time_total):
     print('loss:', loss)
     phi_1_result[timeframe] = phi_1.x.array
     phi_2_result[timeframe] = phi_2.x.array
-    v_exact.x.array[:] = v_exact_all_time[timeframe]
-    cm_phi_1_per_timeframe.append(compute_error(v_exact, phi_1))
+    # v_exact.x.array[:] = v_exact_all_time[timeframe]
+    # cm_phi_1_per_timeframe.append(compute_error(v_exact, phi_1))
     loss_per_timeframe.append(loss)
 
-plt.subplot(1, 2, 1)
-plt.plot(cm_phi_1_per_timeframe)
-plt.title('error in center of mass')
-plt.xlabel('time')
-plt.subplot(1, 2, 2)
-plt.plot(loss_per_timeframe)
-plt.title('cost functional')
-plt.xlabel('time')
-plt.show()
+# plt.subplot(1, 2, 1)
+# plt.plot(cm_phi_1_per_timeframe)
+# plt.title('error in center of mass')
+# plt.xlabel('time')
+# plt.subplot(1, 2, 2)
+# plt.plot(loss_per_timeframe)
+# plt.title('cost functional')
+# plt.xlabel('time')
+# plt.show()
+
+# check result
+# marker_exact = np.zeros(sub_node_num)
+# marker_exact[v_exact_all_time[0] > -85 and v_exact_all_time[0] < 0] = 1
+marker_result = np.zeros(sub_node_num)
+marker_result[phi_1.x.array < 0] = 1
+
+marker = Function(V2)
+# grid0 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
+# marker.x.array[:] = marker_exact
+# grid0.point_data["marker_exact"] = eval_function(marker, subdomain_ventricle.geometry.x)
+# grid0.set_active_scalars("marker_exact")
+grid1 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
+marker.x.array[:] = marker_result
+grid1.point_data["marker_reult"] = eval_function(marker, subdomain_ventricle.geometry.x)
+grid1.set_active_scalars("marker_reult")
+
+plotter = pyvista.Plotter()
+plotter.add_mesh(grid1, show_edges=True)
+plotter.view_xy()
+plotter.add_axes()
+plotter.show()

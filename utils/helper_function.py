@@ -7,6 +7,17 @@ from dolfinx.plot import vtk_mesh
 import numpy as np
 import pyvista
 
+# G function
+def G(s):
+    if not isinstance(s, np.ndarray):
+        s = np.array(s)
+    condition1 = s > 0
+    condition2 = s < 0
+    result = np.zeros_like(s)
+    result[condition1] = 1
+    result[condition2] = 0
+    return result
+
 # G_tau function
 def G_tau(s, tau):
     if not isinstance(s, np.ndarray):

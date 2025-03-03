@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe = 5, 
+                                          u_peak_ischemic_val = 0.7, u_rest_ischemic_val = 0.3,
                                           submesh_flag = False, ischemia_flag = False):
     if submesh_flag:
         # mesh of Body
@@ -91,21 +92,21 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe
 
     if ischemia_flag:
         u_peak = Function(V)
-        u_peak.interpolate(ischemia_condition(0.8, 1))
+        u_peak.interpolate(ischemia_condition(u_peak_ischemic_val, 1))
         u_rest = Function(V)
-        u_rest.interpolate(ischemia_condition(0.2, 0))
+        u_rest.interpolate(ischemia_condition(u_rest_ischemic_val, 0))
     else:
         u_peak = 1
         u_rest = 0
     
     u_n = Function(V)
-    u_n.interpolate(activation_initial_condition(0.8, 0.2))
+    u_n.interpolate(activation_initial_condition(u_peak_ischemic_val, u_rest_ischemic_val))
 
     v_n = Function(V)
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
 
     uh = Function(V)
-    uh.interpolate(activation_initial_condition(0.8, 0.2))
+    uh.interpolate(activation_initial_condition(u_peak_ischemic_val, u_rest_ischemic_val))
 
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)
@@ -126,10 +127,8 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe
 
     solver = PETSc.KSP().create(subdomain_ventricle.comm)
     solver.setOperators(A)
-    solver.setType(PETSc.KSP.Type.GMRES)
-    solver.getPC().setType(PETSc.PC.Type.HYPRE)
-    # solver.setType(PETSc.KSP.Type.PREONLY)
-    # solver.getPC().setType(PETSc.PC.Type.LU)
+    solver.setType(PETSc.KSP.Type.PREONLY)
+    solver.getPC().setType(PETSc.PC.Type.LU)
 
     u_data = []
     u_data.append(u_n.x.array.copy())
