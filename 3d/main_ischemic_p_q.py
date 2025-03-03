@@ -71,8 +71,12 @@ a2 = -70 # no active ischemia
 a3 = 10  # active no ischemia
 a4 = -10 # active ischemia
 tau = 1
+alpha1 = 1e-1
+alpha2 = 1e-5
 
 # phi G_phi delta_phi delta_deri_phi
+phi_1_est = Function(V2)
+phi_2_est = Function(V2)
 phi_1 = Function(V2)
 phi_2 = Function(V2)
 G_phi_1 = Function(V2)
@@ -107,9 +111,9 @@ solver.getPC().setType(PETSc.PC.Type.HYPRE)
 # vector b_u
 dx2 = Measure("dx",domain = subdomain_ventricle)
 b_u_element = -(a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
-        -(a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 \
-        -(a3 - a4) * delta_phi_1 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
-        -(a2 - a4) * delta_phi_2 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2
+        - (a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 \
+        - (a3 - a4) * delta_phi_1 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
+        - (a2 - a4) * delta_phi_2 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2
 entity_map = {domain._cpp_object: ventricle_to_torso}
 linear_form_b_u = form(b_u_element, entity_maps = entity_map)
 b_u = create_vector(linear_form_b_u)
@@ -123,7 +127,11 @@ form_c2 = form(c2_element)
 
 # scalar loss
 loss_element_1 = 0.5 * (u - d) ** 2 * ds
+loss_element_2 = 0.5 * alpha1 * (phi_1 - phi_1_est) ** 2 * dx2 \
+    + 0.5 * alpha2 * (phi_2 - phi_2_est) ** 2 * dx2 \
+
 form_loss_1 = form(loss_element_1)
+form_loss_2 = form(loss_element_2)
 
 # vector b_w
 b_w_element = u1 * (u - d) * ds
@@ -133,18 +141,20 @@ b_w = create_vector(linear_form_b_w)
 # vector direction
 u2 = TestFunction(V2)
 j_p = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
-        -(a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
-        -(a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
-        -(a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
-        -(a3 - a4) * delta_phi_1 * (1 - G_phi_2) * dot(grad(w), dot(Mi, grad(u2))) * dx2
+        - (a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
+        - (a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        - (a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
+        - (a3 - a4) * delta_phi_1 * (1 - G_phi_2) * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        + alpha1 * (phi_1 - phi_1_est) * u2 * dx2
 form_J_p = form(j_p, entity_maps = entity_map)
 J_p = create_vector(form_J_p)
 
 j_q = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
-        -(a1 - a3) * delta_deri_phi_2 * G_phi_1 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
-        -(a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
-        -(a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
-        -(a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2
+        - (a1 - a3) * delta_deri_phi_2 * G_phi_1 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
+        - (a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        - (a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
+        - (a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        + alpha2 * (phi_2 - phi_2_est) * u2 * dx2
 form_J_q = form(j_q, entity_maps = entity_map)
 J_q = create_vector(form_J_q)
 
@@ -168,6 +178,16 @@ loss_per_timeframe = []
 for timeframe in range(time_total):
 
     d.x.array[:] = d_all_time[timeframe]
+
+    if timeframe == 0:
+        phi_1_est.x.array[:] = phi_1.x.array
+        phi_2_est.x.array[:] = phi_2.x.array
+    elif timeframe == 1:
+        phi_1_est.x.array[:] = phi_1_result[timeframe-1]
+        phi_2_est.x.array[:] = phi_2_result[timeframe-1]
+    else:
+        phi_1_est.x.array[:] = np.mean(phi_1_result[0:timeframe], axis=0)
+        phi_2_est.x.array[:] = 2 * phi_2_result[timeframe-1] - phi_2_result[timeframe-2]
 
     G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
     G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
@@ -203,7 +223,7 @@ for timeframe in range(time_total):
         loss = assemble_scalar(form_loss_1)
 
         # check if the condition is satisfie
-        if (np.linalg.norm(J_p.array) < 1e1 and np.linalg.norm(J_q.array) < 1e1):
+        if (np.linalg.norm(J_p.array) < 1e0 and np.linalg.norm(J_q.array) < 1e0):
              break
         
          # line search
@@ -211,10 +231,13 @@ for timeframe in range(time_total):
         phi_2_v = phi_2.x.array[:].copy()
         J_p_array = J_p.array.copy()
         J_q_array = J_q.array.copy()
+        J_p_array[sub_domain_boundary] = J_p_array[sub_domain_boundary] / 10
+        J_q_array[sub_domain_boundary] = J_q_array[sub_domain_boundary] / 10
         alpha = 1
-        gamma = 0.5
+        gamma = 0.6
         c = 0.1
-        while(True):
+        i = 0
+        while(i < 20):
             # adjust p q
             phi_1.x.array[:] = phi_1_v - alpha * J_p_array
             phi_2.x.array[:] = phi_2_v - alpha * J_q_array
@@ -233,11 +256,13 @@ for timeframe in range(time_total):
             adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
             u.x.array[:] = u.x.array + adjustment
             # compute loss
-            J = assemble_scalar(form_loss_1)
-            J_cmp = J - (loss - c * alpha * np.linalg.norm(np.concatenate((J_p_array, J_q_array)))**2)
-            if (J_cmp < 1e-1):
+            loss_new = assemble_scalar(form_loss_1) \
+                + assemble_scalar(form_loss_2)
+            loss_cmp = loss_new - (loss - c * alpha * np.linalg.norm(np.concatenate((J_p.array, J_q.array)))**2)
+            if (loss_cmp < 1e-1):
                 break
             alpha = gamma * alpha
+            i = i + 1
         k = k + 1
 
     print('timeframe:', timeframe)
@@ -265,7 +290,7 @@ for timeframe in range(time_total):
 # marker_exact = np.zeros(sub_node_num)
 # marker_exact[v_exact_all_time[0] > -85 and v_exact_all_time[0] < 0] = 1
 marker_result = np.zeros(sub_node_num)
-marker_result[phi_1.x.array < 0] = 1
+marker_result[np.mean(phi_1_result, axis=0) < 0] = 1
 
 marker = Function(V2)
 # grid0 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))

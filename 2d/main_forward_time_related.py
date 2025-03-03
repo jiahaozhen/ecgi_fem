@@ -82,7 +82,7 @@ a4 = -20 # active ischemia
 tau = 0.05
 time_total = 41
 
-phi_1_exact = phi1_exact_solution(4, 6, 2)
+phi_1_exact = phi1_exact_solution(4, 2, 1)
 phi_2_exact = phi2_exact_solution(4, 4, 0)
 phi_1 = Function(V2)
 phi_1.interpolate(phi_1_exact)

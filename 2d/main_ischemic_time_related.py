@@ -59,14 +59,14 @@ a2 = -60 # no active ischemia
 a3 = 10  # active no ischemia
 a4 = -20 # active ischemia
 tau = 0.05
-# alpha1 = 1e-3
-# alpha2 = 1e-5
+alpha1 = 1e-1
+alpha2 = 1e-5
 
 # phi G_phi delta_phi delta_deri_phi
 phi_1 = Function(V2)
 phi_2 = Function(V2)
-# phi_1_prior = Function(V2)
-# phi_2_prior = Function(V2)
+phi_1_est = Function(V2)
+phi_2_est = Function(V2)
 G_phi_1 = Function(V2)
 G_phi_2 = Function(V2)
 delta_phi_1 = Function(V2)
@@ -99,9 +99,9 @@ solver.getPC().setType(PETSc.PC.Type.HYPRE)
 # vector b_u
 dx2 = Measure("dx", domain = subdomain)
 b_u_element = -(a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
-        -(a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 \
-        -(a3 - a4) * delta_phi_1 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
-        -(a2 - a4) * delta_phi_2 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2
+        - (a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 \
+        - (a3 - a4) * delta_phi_1 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
+        - (a2 - a4) * delta_phi_2 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2
 entity_map = {domain._cpp_object: sub_to_parent}
 linear_form_b_u = form(b_u_element, entity_maps = entity_map)
 b_u = create_vector(linear_form_b_u)
@@ -115,12 +115,12 @@ form_c2 = form(c2_element)
 
 # scalar loss
 loss_element_1 = 0.5 * (u - d) ** 2 * ds
-# loss_element_2 = 0.5 * alpha1 * (phi_1 - phi_1_prior) ** 2 * dx2 \
-#     + 0.5 * alpha2 * (phi_2 - phi_2_prior) ** 2 * dx2 \
+loss_element_2 = 0.5 * alpha1 * (phi_1 - phi_1_est) ** 2 * dx2 \
+    + 0.5 * alpha2 * (phi_2 - phi_2_est) ** 2 * dx2 \
 #     + 0.5 * alpha1 * dot(grad(phi_1 - phi_1_prior), grad(phi_1 - phi_1_prior)) * dx2 \
 #     + 0.5 * alpha2 * dot(grad(phi_2 - phi_2_prior), grad(phi_2 - phi_2_prior)) * dx2
 form_loss_1 = form(loss_element_1)
-# form_loss_2 = form(loss_element_2)
+form_loss_2 = form(loss_element_2)
 
 # vector b_w
 b_w_element = u1 * (u - d) * ds
@@ -130,24 +130,23 @@ b_w = create_vector(linear_form_b_w)
 # vector direction p
 u2 = TestFunction(V2)
 j_p = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
-        -(a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
-        -(a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
-        -(a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
-        -(a3 - a4) * delta_phi_1 * (1 - G_phi_2) * dot(grad(w), dot(Mi, grad(u2))) * dx2
+        - (a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
+        - (a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        - (a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
+        - (a3 - a4) * delta_phi_1 * (1 - G_phi_2) * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        + alpha1 * (phi_1 - phi_1_est) * u2 * dx2
 form_J_p = form(j_p, entity_maps=entity_map)
 J_p = create_vector(form_J_p)
 
 # vector direction q
 j_q = -(a1 - a2 -a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
-        -(a1 - a3) * delta_deri_phi_2 * G_phi_1 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
-        -(a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
-        -(a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
-        -(a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2
+        - (a1 - a3) * delta_deri_phi_2 * G_phi_1 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
+        - (a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        - (a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
+        - (a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
+        + alpha2 * (phi_2 - phi_2_est) * u2 * dx2
 form_J_q = form(j_q, entity_maps=entity_map)
 J_q = create_vector(form_J_q)
-
-# phi_2_prior
-# phi_2_prior.x.array[:] = np.ones(sub_node_num) * tau/2
 
 # exact phi_1 phi_2
 phi_1_exact = Function(V2)
@@ -168,13 +167,23 @@ cm_phi_2_per_timeframe = []
 loss_per_timeframe = []
 
 for timeframe in range(time_total):
-    # phi_1_prior.x.array[:] = phi_1.x.array
-    # phi_2_prior.x.array[:] = phi_2.x.array
 
     # define d's value on the boundary
     d.x.array[:] = d_all_time[timeframe]
     # phi_1.x.array[:] = phi_1_exact.x.array
     # phi_2.x.array[:] = phi_2_exact_all_time[timeframe]
+    if timeframe == 0:
+        phi_1_est.x.array[:] = phi_1.x.array
+        phi_2_est.x.array[:] = phi_2.x.array
+    elif timeframe == 1:
+        phi_1_est.x.array[:] = phi_1_result[timeframe-1]
+        phi_2_est.x.array[:] = phi_2_result[timeframe-1]
+    else:
+        phi_1_est.x.array[:] = np.mean(phi_1_result[0:timeframe], axis=0)
+        phi_2_est.x.array[:] = 2 * phi_2_result[timeframe-1] - phi_2_result[timeframe-2]
+
+    # phi_1.x.array[:] = phi_0
+    # phi_2.x.array[:] = phi_0
 
     G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
     G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
@@ -207,7 +216,8 @@ for timeframe in range(time_total):
             loc_J.set(0)
         assemble_vector(J_q, form_J_q)
         # cost function
-        loss = assemble_scalar(form_loss_1)
+        loss = assemble_scalar(form_loss_1)\
+             + assemble_scalar(form_loss_2)
 
         # check if the condition is satisfie
         if (np.linalg.norm(J_p.array) < 1e-1 and np.linalg.norm(J_q.array) < 1e-1):
@@ -220,11 +230,9 @@ for timeframe in range(time_total):
         phi_2_v = phi_2.x.array[:].copy()
         J_p_array = J_p.array.copy()
         J_q_array = J_q.array.copy()
-        # J_p_array[sub_boundary_index] = J_p_array[sub_boundary_index] / 10
-        # J_q_array[sub_boundary_index] = J_q_array[sub_boundary_index] / 10
+        J_p_array[sub_boundary_index] = J_p_array[sub_boundary_index] / 10
+        J_q_array[sub_boundary_index] = J_q_array[sub_boundary_index] / 10
         alpha = 1
-        # alpha = np.ones_like(J_p_array)
-        # alpha[sub_boundary_index] = 1/2
         gamma = 0.6
         c = 0.1
         while(True):
@@ -246,10 +254,10 @@ for timeframe in range(time_total):
             adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
             u.x.array[:] = u.x.array + adjustment
             # compute loss
-            J = assemble_scalar(form_loss_1)
-            J_cmp = J - (loss - c * alpha * np.linalg.norm(np.concatenate((J_p.array, J_q.array)))**2)
-            # J_cmp = J - (loss - c * alpha * np.linalg.norm(J_p_array)**2)
-            if (J_cmp < 1e-2):
+            loss_new = assemble_scalar(form_loss_1) \
+                + assemble_scalar(form_loss_2)
+            loss_cmp = loss_new - (loss - c * alpha * np.linalg.norm(np.concatenate((J_p.array, J_q.array)))**2)
+            if (loss_cmp < 1e-2):
                 break
             alpha = gamma * alpha
         k = k + 1
@@ -265,14 +273,14 @@ for timeframe in range(time_total):
     loss_per_timeframe.append(loss)
 
 # np.save('2d/data/phi_1_result.npy', phi_1.x.array)
-# np.save('2d/data/phi_2_result.npy',phi_2.x.array)
+# np.save('2d/data/phi_2_result.npy', phi_2.x.array)
 # np.save('2d/data/phi_1_exact.npy', phi_1_exact.x.array)
 
 # check result
 marker_exact = np.zeros(sub_node_num)
 marker_exact[phi_1_exact.x.array < 0] = 1
 marker_result = np.zeros(sub_node_num)
-marker_result[phi_1.x.array < 0] = 1
+marker_result[np.mean(phi_1_result, axis=0) < 0] = 1
 
 # phi_1_average = Function(V2)
 # phi_1_average.x.array[:] = np.mean(phi_1_result, axis=0)
