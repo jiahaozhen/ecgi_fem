@@ -9,13 +9,13 @@ from dolfinx.plot import vtk_mesh
 from ufl import TestFunction, TrialFunction, dot, grad, Measure
 from mpi4py import MPI
 from petsc4py import PETSc
-from helper_function import compare_CM
 import numpy as np
 import pyvista
 import matplotlib.pyplot as plt
+import multiprocessing
 
 sys.path.append('.')
-from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function
+from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function, compute_error_with_v
 
 # mesh of Body
 file = "2d/data/heart_torso.msh"
@@ -59,8 +59,8 @@ a2 = -60 # no active ischemia
 a3 = 10  # active no ischemia
 a4 = -20 # active ischemia
 tau = 0.05
-alpha1 = 1e-1
-alpha2 = 1e-5
+alpha1 = 0
+alpha2 = 0
 
 # phi G_phi delta_phi delta_deri_phi
 phi_1 = Function(V2)
@@ -148,10 +148,11 @@ j_q = -(a1 - a2 -a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi
 form_J_q = form(j_q, entity_maps=entity_map)
 J_q = create_vector(form_J_q)
 
-# exact phi_1 phi_2
+# exact phi_1 phi_2 v
 phi_1_exact = Function(V2)
 phi_1_exact.x.array[:] = np.load(file='2d/data/phi_1.npy')
 phi_2_exact_all_time = np.load('2d/data/phi_2_all_time.npy')
+v_exact_all_time  = np.load(file='2d/data/v_exat_all_time.npy')
 
 # initial phi_1 phi_2
 phi_0 = np.full(phi_1.x.array.shape, tau/2)
@@ -161,6 +162,7 @@ phi_2.x.array[:] = phi_0
 # phi result
 phi_1_result = np.zeros((time_total, sub_node_num))
 phi_2_result = np.zeros((time_total, sub_node_num))
+v_result = np.zeros((time_total, sub_node_num))
 
 cm_phi_1_per_timeframe = []
 cm_phi_2_per_timeframe = []
@@ -171,7 +173,7 @@ for timeframe in range(time_total):
     # define d's value on the boundary
     d.x.array[:] = d_all_time[timeframe]
     # phi_1.x.array[:] = phi_1_exact.x.array
-    # phi_2.x.array[:] = phi_2_exact_all_time[timeframe]
+    phi_2.x.array[:] = phi_2_exact_all_time[timeframe]
     if timeframe == 0:
         phi_1_est.x.array[:] = phi_1.x.array
         phi_2_est.x.array[:] = phi_2.x.array
@@ -179,8 +181,11 @@ for timeframe in range(time_total):
         phi_1_est.x.array[:] = phi_1_result[timeframe-1]
         phi_2_est.x.array[:] = phi_2_result[timeframe-1]
     else:
-        phi_1_est.x.array[:] = np.mean(phi_1_result[0:timeframe], axis=0)
-        phi_2_est.x.array[:] = 2 * phi_2_result[timeframe-1] - phi_2_result[timeframe-2]
+        phi_1_est.x.array[:] = phi_1_result[timeframe-1]
+        # prior
+        phi_2_est.x.array[:] = phi_2_result[timeframe-1]
+        # difference
+        # phi_2_est.x.array[:] = 2 * phi_2_result[timeframe-1] - phi_2_result[timeframe-2]
 
     # phi_1.x.array[:] = phi_0
     # phi_2.x.array[:] = phi_0
@@ -222,8 +227,6 @@ for timeframe in range(time_total):
         # check if the condition is satisfie
         if (np.linalg.norm(J_p.array) < 1e-1 and np.linalg.norm(J_q.array) < 1e-1):
             break
-        # if (np.linalg.norm(J_p.array) < 1e-2 and loss < 1e-2):
-            # break
         
         # line search
         phi_1_v = phi_1.x.array[:].copy()
@@ -235,7 +238,8 @@ for timeframe in range(time_total):
         alpha = 1
         gamma = 0.6
         c = 0.1
-        while(True):
+        step_search = 0
+        while(step_search < 20):
             # adjust p q
             phi_1.x.array[:] = phi_1_v - alpha * J_p_array
             phi_2.x.array[:] = phi_2_v - alpha * J_q_array
@@ -260,89 +264,67 @@ for timeframe in range(time_total):
             if (loss_cmp < 1e-2):
                 break
             alpha = gamma * alpha
+            step_search = step_search + 1
         k = k + 1
 
+    loss_per_timeframe.append(loss)
+    phi_1_result[timeframe] = phi_1.x.array
+    phi_2_result[timeframe] = phi_2.x.array
+    v_result[timeframe] = (a1*G_phi_2.x.array + a3*(1-G_phi_2.x.array)) * G_phi_1.x.array + (a2*G_phi_2.x.array + a4*(1-G_phi_2.x.array)) * (1-G_phi_1.x.array)
+    cm1, cm2 = compute_error_with_v(v_exact_all_time[timeframe], v_result[timeframe], V2, -90, -60, 10, -20)
+    cm_phi_1_per_timeframe.append(cm1)
+    cm_phi_2_per_timeframe.append(cm2)
     print('timeframe:', timeframe)
     print('end at', k, 'iteration')
     print('J_p:', np.linalg.norm(J_p.array))
     print('J_q:', np.linalg.norm(J_q.array))
     print('loss:', loss)
-    phi_1_result[timeframe] = phi_1.x.array
-    phi_2_result[timeframe] = phi_2.x.array
-    cm_phi_1_per_timeframe.append(compare_CM(subdomain, phi_1_exact, phi_1))
-    loss_per_timeframe.append(loss)
+    print('error in center of mass (ischemic):', cm1)
+    print('error in center of mass (activation):', cm2)
 
 # np.save('2d/data/phi_1_result.npy', phi_1.x.array)
 # np.save('2d/data/phi_2_result.npy', phi_2.x.array)
 # np.save('2d/data/phi_1_exact.npy', phi_1_exact.x.array)
+def plot_loss_and_cm():
+    plt.subplot(1, 3, 1)
+    plt.plot(loss_per_timeframe)
+    plt.title('cost functional')
+    plt.xlabel('time')
+    plt.subplot(1, 3, 2)
+    plt.plot(cm_phi_1_per_timeframe)
+    plt.title('error in center of mass (ischemic)')
+    plt.xlabel('time')
+    plt.subplot(1, 3, 3)
+    plt.plot(cm_phi_2_per_timeframe)
+    plt.title('error in center of mass (activation)')
+    plt.xlabel('time')
+    plt.show()
 
-# check result
-marker_exact = np.zeros(sub_node_num)
-marker_exact[phi_1_exact.x.array < 0] = 1
-marker_result = np.zeros(sub_node_num)
-marker_result[np.mean(phi_1_result, axis=0) < 0] = 1
+def plot_with_time(value, title):
+    v_function = Function(V2)
+    plotter = pyvista.Plotter(shape=(2, 5))
+    for i in range(2):
+        for j in range(5):
+            plotter.subplot(i, j)
+            grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
+            v_function.x.array[:] = value[i*20 + j*5]
+            grid.point_data[title] = eval_function(v_function, subdomain.geometry.x)
+            grid.set_active_scalars(title)
+            plotter.add_mesh(grid, show_edges=True)
+            plotter.add_text(f"Time: {i*20 + j*5:.1f} ms", position='lower_right', font_size=12)
+            plotter.view_xy()
+            plotter.add_title(title, font_size=12)
+    plotter.show()
 
-# phi_1_average = Function(V2)
-# phi_1_average.x.array[:] = np.mean(phi_1_result, axis=0)
-# print(phi_1_average.x.array)
-# print(compare_CM(subdomain, phi_1_exact, phi_1_average))
-
-plt.subplot(1, 2, 1)
-plt.plot(cm_phi_1_per_timeframe)
-plt.title('error in center of mass')
-plt.xlabel('time')
-plt.subplot(1, 2, 2)
-plt.plot(loss_per_timeframe)
-plt.title('cost functional')
-plt.xlabel('time')
-plt.show()
-
-marker = Function(V2)
-grid0 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-marker.x.array[:] = marker_exact
-grid0.point_data["marker_exact"] = eval_function(marker, subdomain.geometry.x)
-grid0.set_active_scalars("marker_exact")
-grid1 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-marker.x.array[:] = marker_result
-grid1.point_data["marker_reult"] = eval_function(marker, subdomain.geometry.x)
-grid1.set_active_scalars("marker_reult")
-# grid2 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-# grid2.point_data["phi_1_exact"] = eval_function(phi_1_exact, subdomain.geometry.x)
-# grid2.set_active_scalars("phi_1_exact")
-# grid3 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-# grid3.point_data["phi_1_result"] = eval_function(phi_1, subdomain.geometry.x)
-# grid3.set_active_scalars("phi_1_result")
-# grid4 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-# marker.x.array[:] = phi_2_exact_all_time[time_total-1]
-# grid4.point_data["phi_2_exact"] = eval_function(marker, subdomain.geometry.x)
-# grid4.set_active_scalars("phi_2_exact")
-# grid5 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-# grid5.point_data["phi_2_result"] = eval_function(phi_2, subdomain.geometry.x)
-# grid5.set_active_scalars("phi_2_result")
-
-# grid = (grid0, grid2, grid4, grid1, grid3, grid5)
-
-grid = (grid0, grid1)
-plotter = pyvista.Plotter(shape=(1, 2))
-for i in range(1):
-    for j in range(2):
-        plotter.subplot(i, j)
-        plotter.add_mesh(grid[i+j], show_edges=True)
-        plotter.view_xy()
-        plotter.add_axes()
-plotter.show()
-
-# plotter = pyvista.Plotter(shape=(2, 4))
-# for i in range(2):
-#     for j in range(4):
-#         plotter.subplot(i, j)
-#         grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-#         grid.point_data["phi_2"] = phi_2_result[i*20 + j*5]
-#         grid.set_active_scalars("phi_2")
-#         # grid = pyvista.UnstructuredGrid(*vtk_mesh(domain, tdim))
-#         # grid.point_data["u"] = u_all_time[i*20 + j*5]
-#         # grid.set_active_scalars("u")
-#         plotter.add_mesh(grid, show_edges=True)
-#         plotter.view_xy()
-#         plotter.add_axes()
-# plotter.show()
+p1 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_1_result < 0, 1, 0), 'ischemic'))
+p2 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_2_result < 0, 1, 0), 'activation'))
+p3 = multiprocessing.Process(target=plot_with_time, args=(v_result, 'v'))
+p4 = multiprocessing.Process(target=plot_loss_and_cm)
+p1.start()
+p2.start()
+p3.start()
+p4.start()
+p1.join()
+p2.join()
+p3.join()
+p4.join()

@@ -61,6 +61,34 @@ def petsc2array(v):
     s=v.getValues(range(0, v.getSize()[0]), range(0,  v.getSize()[1]))
     return s
 
+def compute_error_with_v(v_exact, v_result, function_space, v_rest_healthy, v_rest_ischemic, v_peak_healthy, v_peak_ischemic):
+    #ichemic region
+    ischemic_exact_condition = ((v_exact > v_rest_ischemic-5) & (v_exact < v_rest_ischemic+5)) | ((v_exact > v_peak_ischemic-5) & (v_exact < v_peak_ischemic+5))
+    marker_ischemic_exact = np.where(ischemic_exact_condition, 1, 0)
+    ischemic_result_condition = ((v_result > v_rest_ischemic-5) & (v_result < v_rest_ischemic+5)) | ((v_result > v_peak_ischemic-5) & (v_result < v_peak_ischemic+5))
+    marker_ischemic_result = np.where(ischemic_result_condition, 1, 0)
+    #activate region
+    activate_exact_condition = v_exact > (v_peak_healthy + v_rest_healthy)/2
+    marker_activate_exact = np.where(activate_exact_condition, 1, 0)
+    activate_result_condition = v_result > (v_peak_healthy + v_rest_healthy)/2
+    marker_activate_result = np.where(activate_result_condition, 1, 0)
+
+    coordinates = function_space.tabulate_dof_coordinates()
+    coordinates_ischemic_exact = coordinates[np.where(marker_ischemic_exact == 1)]
+    coordinates_ischemic_result = coordinates[np.where(marker_ischemic_result == 1)]
+    coordinates_activate_exact = coordinates[np.where(marker_activate_exact == 1)]
+    coordinates_activate_result = coordinates[np.where(marker_activate_result == 1)]
+
+    cm_ischemic_exact = np.mean(coordinates_ischemic_exact, axis=0)
+    cm_ischemic_result = np.mean(coordinates_ischemic_result, axis=0)
+    cm_activate_exact = np.mean(coordinates_activate_exact, axis=0)
+    cm_activate_result = np.mean(coordinates_activate_result, axis=0)
+
+    cm_error_ischemic = np.linalg.norm(cm_ischemic_exact-cm_ischemic_result)   
+    cm_error_activate = np.linalg.norm(cm_activate_exact-cm_activate_result)
+
+    return (cm_error_ischemic, cm_error_activate)
+
 def compute_error(v_exact, phi_result):
     marker_exact = np.full(v_exact.x.array.shape, 0)
     marker_exact[v_exact.x.array > -89.9] = 1
