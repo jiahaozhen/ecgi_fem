@@ -6,29 +6,50 @@ from dolfinx.plot import vtk_mesh
 from dolfinx.fem import functionspace, Function
 from mpi4py import MPI
 import pyvista
+import numpy as np
 from main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
 
 sys.path.append('.')
 from utils.helper_function import eval_function
 
 submesh_flag = True
-ischemia_flag = True
-if submesh_flag:
-    mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
-    # mesh of Body
-    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
+ischemia_flag = False
+gdim = 2
+if gdim == 2:
+    mesh_file = '2d/data/heart_torso.msh'
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
     tdim = domain.topology.dim
-    # mesh of Heart
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+    T = 40
+    center_activation = np.array([4.0, 4.0])
+    radius_activation = 0.1
+    center_ischemic = np.array([4.0, 6.0])
+    radius_ischemic = 0.5
 else:
-    mesh_file = '3d/data/mesh_ecgsim_ventricle.msh'
-    subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
-    tdim = subdomain_ventricle.topology.dim
+    if submesh_flag:
+        mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
+        # mesh of Body
+        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
+        tdim = domain.topology.dim
+        # mesh of Heart
+        subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+    else:
+        mesh_file = '3d/data/mesh_ecgsim_ventricle.msh'
+        subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
+        tdim = subdomain_ventricle.topology.dim
+    T = 40
+    center_activation = np.array([57, 51.2, 15])
+    radius_activation = 5
+    center_ischemic = np.array([89.1, 40.9, -13.3])
+    radius_ischemic = 30
 
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
 u_data = compute_v_based_on_reaction_diffusion(
-    mesh_file, T = 50, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag)
+    mesh_file, T = T, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag, 
+    gdim = gdim, center_activation = center_activation, radius_activation = radius_activation,
+    center_ischemic = center_ischemic, radius_ischemic = radius_ischemic
+)
 
 plotter = pyvista.Plotter()
 grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
@@ -37,10 +58,15 @@ grid["u"] = eval_function(u, subdomain_ventricle.geometry.x)
 plotter.add_mesh(grid, scalars="u", cmap="viridis", clim=[0, 1])
 plotter.view_isometric()
 plotter.add_text('',name="time_text", font_size=18, color="red")
-if ischemia_flag:
-    plotter.open_gif("reaction_diffusion/u_data_3d_ischemia.gif")
+if gdim == 2:
+    name = "reaction_diffusion/u_data_2d"
 else:
-    plotter.open_gif("reaction_diffusion/u_data_3d_healthy.gif")
+    name = "reaction_diffusion/u_data_3d"
+if ischemia_flag:
+    name += "_ischemic.gif"
+else:
+    name += "_healthy.gif"
+plotter.open_gif(name)
 
 t = 0
 time_step = 0.2

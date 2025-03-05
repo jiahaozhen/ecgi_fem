@@ -3,9 +3,7 @@ from dolfinx.mesh import locate_entities_boundary, meshtags, exterior_facet_indi
 from dolfinx.geometry import bb_tree, compute_collisions_points, compute_colliding_cells
 from dolfinx.fem import functionspace, Function, Expression
 from .normals_and_tangents import facet_vector_approximation
-from dolfinx.plot import vtk_mesh
 import numpy as np
-import pyvista
 
 # G function
 def G(s):
@@ -235,3 +233,6 @@ def fspace2mesh(V):
 def get_activation_time_from_v(v_data, threshold):
     activation_time = np.argmax(v_data > threshold, axis=0)
     return activation_time
+
+def build_laplacian_matrix_on_mesh(mesh):
+    pass

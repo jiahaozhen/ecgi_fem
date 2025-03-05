@@ -17,7 +17,7 @@ import h5py
 sys.path.append('.')
 from utils.helper_function import eval_function
 
-def forward_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_flag=True, plot_flag=False):
+def forward_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_flag=True, plot_flag=False, gdim = 3):
     """
     Solves the forward problem for cardiac and torso electrostatic potentials using the finite element method (FEM).
     This function computes the transmembrane potential (TMP) in the body based on the provided ECG simulation data.
@@ -34,7 +34,7 @@ def forward_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_
         list: A list of computed body potentials (`u_data`) at each time step corresponding to the input `v_data`.
     """
     # mesh of Body
-    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
     tdim = domain.topology.dim
     # mesh of Heart
     subdomain_ventricle, ventricle_to_torso, _, _ = create_submesh(domain, tdim, cell_markers.find(2))

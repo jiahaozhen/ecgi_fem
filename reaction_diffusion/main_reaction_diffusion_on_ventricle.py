@@ -10,24 +10,30 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe = 5, 
+def compute_v_based_on_reaction_diffusion(mesh_file, gdim = 3, T = 100, step_per_timeframe = 5, 
                                           u_peak_ischemic_val = 0.7, u_rest_ischemic_val = 0.3,
-                                          submesh_flag = False, ischemia_flag = False):
+                                          submesh_flag = False, ischemia_flag = False, 
+                                          center_activation = np.array([57, 51.2, 15]), radius_activation = 5,
+                                          center_ischemic = np.array([89.1, 40.9, -13.3]), radius_ischemic = 30):
+    
     if submesh_flag:
         # mesh of Body
-        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
+        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
         tdim = domain.topology.dim
         # mesh of Heart
         subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
     else:
-        subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
+        subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
 
     t = 0
     num_steps = T * step_per_timeframe
     dt = T / num_steps  # time step size
 
     # A two-current model for the dynamics of cardiac membrane
-    D = 4
+    if gdim == 3:
+        D = 4
+    else:
+        D = 0.001
     tau_in = 0.2
     tau_out = 10
     tau_open = 130
@@ -53,42 +59,52 @@ def compute_v_based_on_reaction_diffusion(mesh_file, T = 100, step_per_timeframe
     # assume node 17 is the center of ischemia 
     # radius = 30
     # node 17 coordinates: (89.1, 40.9, -13.3)
-    node_17 = np.array([89.1, 40.9, -13.3])
+    # node_17 = np.array([89.1, 40.9, -13.3])
     class ischemia_condition():
-        def __init__(self, u_ischemic, u_healthy, ischemia_center = node_17, radius = 30):
+        def __init__(self, u_ischemic, u_healthy, center = center_ischemic, r = radius_ischemic):
             self.u_ischemic = u_ischemic
             self.u_healthy = u_healthy
-            self.ischemia_center = ischemia_center
-            self.radius = radius
+            self.center = center
+            self.r = r
         def __call__(self, x):
-            return np.where((x[0]-self.ischemia_center[0])**2 + 
-                            (x[1]-self.ischemia_center[1])**2 +
-                            (x[2]-self.ischemia_center[2])**2 < self.radius**2, 
-                            self.u_ischemic, self.u_healthy)
+            if gdim == 3:
+                return np.where((x[0]-self.center[0])**2 + 
+                                (x[1]-self.center[1])**2 +
+                                (x[2]-self.center[2])**2 < self.r**2, 
+                                self.u_ischemic, self.u_healthy)
+            else:
+                return np.where((x[0]-self.center[0])**2 + 
+                                (x[1]-self.center[1])**2 < self.r**2, 
+                                self.u_ischemic, self.u_healthy)
     
     # the earliest node: 146
     # node 146 coordinates: (57, 51.2, 15)
-    node_146 = np.array([57, 51.2, 15])
+    # node_146 = np.array([57, 51.2, 15])
     class activation_initial_condition():
-        def __init__(self, u_peak_ischemic, u_rest_ischemic, u_peak_healthy = 1, u_rest_healthy = 0, start = node_146, radius_start = 5, ischemia_center = node_17, radius_ischemia = 30):
-            self.start = start
-            self.radius_start = radius_start
-            self.ischemia_center = ischemia_center
-            self.radius_ischemia = radius_ischemia
+        def __init__(self, u_peak_ischemic, u_rest_ischemic, u_peak_healthy = 1, u_rest_healthy = 0, 
+                    center_a = center_activation, r_a = radius_activation, center_i = center_ischemic, r_i = radius_ischemic):
             self.u_peak_ischemic = u_peak_ischemic
             self.u_peak_healthy = u_peak_healthy
             self.u_rest_ischemic = u_rest_ischemic
             self.u_rest_healthy = u_rest_healthy
+            self.center_a = center_a
+            self.r_a = r_a
+            self.center_i = center_i
+            self.r_i = r_i
         def __call__(self, x):
+            if gdim == 3:
+                condition1 = (x[0]-self.center_a[0])**2 + (x[1]-self.center_a[1])**2 + (x[2]-self.center_a[2])**2 < self.r_a**2
+                condition2 = (x[0]-self.center_i[0])**2 + (x[1]-self.center_i[1])**2 + (x[2]-self.center_i[2])**2 < self.r_i**2
+            else:
+                condition1 = (x[0]-self.center_a[0])**2 + (x[1]-self.center_a[1])**2 < self.r_a**2
+                condition2 = (x[0]-self.center_i[0])**2 + (x[1]-self.center_i[1])**2 < self.r_i**2
+            
             if ischemia_flag:
-                condition1 = (x[0]-self.start[0])**2 + (x[1]-self.start[1])**2 + (x[2]-self.start[2])**2 < self.radius_start**2
-                condition2 = (x[0]-self.ischemia_center[0])**2 + (x[1]-self.ischemia_center[1])**2 + (x[2]-self.ischemia_center[2])**2 < self.radius_ischemia**2
                 return np.where(condition1 & condition2, self.u_peak_ischemic,
                                 np.where( ~condition1 & condition2, self.u_rest_ischemic,
                                             np.where( ~condition1 & ~condition2, self.u_rest_healthy, self.u_peak_healthy)))
             else:
-                condition = (x[0]-self.start[0])**2 + (x[1]-self.start[1])**2 + (x[2]-self.start[2])**2 < self.radius_start**2
-                return np.where(condition, self.u_peak_healthy, self.u_rest_healthy)
+                return np.where(condition1, self.u_peak_healthy, self.u_rest_healthy)
 
     if ischemia_flag:
         u_peak = Function(V)
