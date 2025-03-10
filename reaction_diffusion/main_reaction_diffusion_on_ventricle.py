@@ -185,7 +185,7 @@ if __name__ == '__main__':
     center = np.array([89.1, 40.9, -13.3])
     dist = np.linalg.norm(pts - center, axis=1)
     idx = np.argsort(dist)
-    plt.plot(np.arange(0, v_data.shape[0]/5, 0.2), v_data[:, idx[0]])
+    plt.plot(np.arange(0, v_data.shape[0]/5, 0.2), v_data[:, idx[-24]])
     plt.xlabel('Time (ms)')
     # plt.plot(v_data[:, idx[1]])
     plt.show()

@@ -61,9 +61,11 @@ def petsc2array(v):
 
 def compute_error_with_v(v_exact, v_result, function_space, v_rest_healthy, v_rest_ischemic, v_peak_healthy, v_peak_ischemic):
     #ichemic region
-    ischemic_exact_condition = ((v_exact > v_rest_ischemic-5) & (v_exact < v_rest_ischemic+5)) | ((v_exact > v_peak_ischemic-5) & (v_exact < v_peak_ischemic+5))
+    ischemic_exact_condition = ((v_exact > v_rest_ischemic-5) & (v_exact < v_rest_ischemic+5)| 
+                                (v_exact > v_peak_ischemic-5) & (v_exact < v_peak_ischemic+5))
     marker_ischemic_exact = np.where(ischemic_exact_condition, 1, 0)
-    ischemic_result_condition = ((v_result > v_rest_ischemic-5) & (v_result < v_rest_ischemic+5)) | ((v_result > v_peak_ischemic-5) & (v_result < v_peak_ischemic+5))
+    ischemic_result_condition = ((v_result > v_rest_ischemic-5) & (v_result < v_rest_ischemic+5)| 
+                                (v_result > v_peak_ischemic-5) & (v_result < v_peak_ischemic+5))
     marker_ischemic_result = np.where(ischemic_result_condition, 1, 0)
     #activate region
     activate_exact_condition = v_exact > (v_peak_healthy + v_rest_healthy)/2
@@ -86,6 +88,65 @@ def compute_error_with_v(v_exact, v_result, function_space, v_rest_healthy, v_re
     cm_error_activate = np.linalg.norm(cm_activate_exact-cm_activate_result)
 
     return (cm_error_ischemic, cm_error_activate)
+
+def compute_phi_with_v(v, function_space, v_rest_healthy, v_rest_ischemic, v_peak_healthy, v_peak_ischemic):
+    coordinates = function_space.tabulate_dof_coordinates()
+    marker_ischemic = (((v > v_rest_ischemic - 5) & (v < v_rest_ischemic + 5)) |
+                       ((v > v_peak_ischemic - 5) & (v < v_peak_ischemic + 5)))
+    marker_activate = v > ((v_peak_healthy + v_rest_healthy) / 2)
+    
+    def min_distance(coords, mask):
+        if np.any(mask):
+            return np.min(np.linalg.norm(coords[:, None, :] - coords[mask], axis=2), axis=1)
+        else:
+            return np.zeros(len(coords))
+    
+    min_iso = min_distance(coordinates, marker_ischemic)
+    min_no_iso = min_distance(coordinates, ~marker_ischemic)
+    min_act = min_distance(coordinates, marker_activate)
+    min_no_act = min_distance(coordinates, ~marker_activate)
+    
+    phi_1 = np.where(marker_ischemic, -min_no_iso, min_iso)
+    phi_2 = np.where(marker_activate, -min_no_act, min_act)
+
+    return phi_1, phi_2
+
+def compute_phi_with_v_timebased(v, function_space, v_rest_ischemic, v_peak_ischemic):
+    phi_1 = np.full_like(v, 0)
+    phi_2 = np.full_like(v, 0)
+    activation_time = get_activation_time_from_v(v)
+
+    for i in range(v.shape[1]):
+        phi_2[:activation_time[i], i] = 10
+        phi_2[activation_time[i]:, i] = -10
+        if  (min(v[:, i]) < v_rest_ischemic - 10 or max(v[:, i]) > v_peak_ischemic + 10) :
+            phi_1[:, i] = 10
+        else:
+            phi_1[:, i] = -10
+    # coordinates = function_space.tabulate_dof_coordinates()
+    # marker_ischemic = np.full_like(v, False,  dtype=bool)
+    # marker_activation  = np.full_like(v, False, dtype=bool)
+    # for i in range(v.shape[1]):
+    #     marker_activation[activation_time[i]:, i] = True
+    #     if  (min(v[:, i]) > v_rest_ischemic - 10 and max(v[:, i]) < v_peak_ischemic + 10) :
+    #         marker_ischemic[:, i] = True
+
+    # def min_distance(coords, mask):
+    #     if np.any(mask):
+    #         return np.min(np.linalg.norm(coords[:, None, :] - coords[mask], axis=2), axis=1)
+    #     else:
+    #         return np.zeros(len(coords))
+    
+    # for timeframe in range(v.shape[0]):
+    #     min_iso = min_distance(coordinates, marker_ischemic[timeframe])
+    #     min_no_iso = min_distance(coordinates, ~marker_ischemic[timeframe])
+    #     min_act = min_distance(coordinates, marker_activation[timeframe])
+    #     min_no_act = min_distance(coordinates, ~marker_activation[timeframe])
+    
+    #     phi_1[timeframe] = np.where(marker_ischemic[timeframe], -min_no_iso, min_iso)
+    #     phi_2[timeframe] = np.where(marker_activation[timeframe], -min_no_act, min_act)
+
+    return phi_1, phi_2
 
 def compute_error(v_exact, phi_result):
     marker_exact = np.full(v_exact.x.array.shape, 0)
@@ -230,8 +291,10 @@ def fspace2mesh(V):
                 fspace2mesh[idx_fspace] = idx_submesh
     return fspace2mesh
 
-def get_activation_time_from_v(v_data, threshold):
-    activation_time = np.argmax(v_data > threshold, axis=0)
+def get_activation_time_from_v(v_data):
+    v_deriviative = np.diff(v_data, axis=0)
+    # find the time where the v_deriviative is biggest
+    activation_time = np.argmax(v_deriviative, axis=0)
     return activation_time
 
 def build_laplacian_matrix_on_mesh(mesh):

@@ -16,7 +16,7 @@ for lc in range(2, 15):
     except IOError:
         create_mesh(target_file, lc)
     v_data_0_1 = compute_v_based_on_reaction_diffusion(target_file)
-    time = max(get_activation_time_from_v(v_data_0_1, 0.5))/5
+    time = max(get_activation_time_from_v(v_data_0_1))/5
     print(f'lc: {lc}, time: {time} ms')
     activation_last.append(time)
 print(activation_last)

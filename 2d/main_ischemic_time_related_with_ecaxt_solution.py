@@ -59,8 +59,8 @@ a2 = -60 # no active ischemia
 a3 = 10  # active no ischemia
 a4 = -20 # active ischemia
 tau = 0.05
-alpha1 = 1e-1
-alpha2 = 1e-1
+alpha1 = 0
+alpha2 = 0
 
 # phi G_phi delta_phi delta_deri_phi
 phi_1 = Function(V2)
@@ -134,7 +134,7 @@ j_p = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(M
         - (a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
         - (a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
         - (a3 - a4) * delta_phi_1 * (1 - G_phi_2) * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
-        + alpha1 * (phi_1 - phi_1_est) * u2 * dx2
+        # + alpha1 * (phi_1 - phi_1_est) * u2 * dx2
 form_J_p = form(j_p, entity_maps=entity_map)
 J_p = create_vector(form_J_p)
 
@@ -144,14 +144,14 @@ j_q = -(a1 - a2 -a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi
         - (a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
         - (a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
         - (a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
-        + alpha2 * (phi_2 - phi_2_est) * u2 * dx2
+        # + alpha2 * (phi_2 - phi_2_est) * u2 * dx2
 form_J_q = form(j_q, entity_maps=entity_map)
 J_q = create_vector(form_J_q)
 
 # exact phi_1 phi_2 v
 phi_1_exact = Function(V2)
-phi_1_exact.x.array[:] = np.load(file='2d/data/phi_1.npy')
-phi_2_exact_all_time = np.load('2d/data/phi_2_all_time.npy')
+phi_1_exact.x.array[:] = np.load(file='2d/data/phi_1_exact_all_time.npy')[0]
+phi_2_exact_all_time = np.load('2d/data/phi_2_exact_all_time.npy')
 v_exact_all_time = np.load('2d/data/v_exact_all_time.npy')
 
 # initial phi_1 phi_2
@@ -172,28 +172,28 @@ for timeframe in range(time_total):
 
     # define d's value on the boundary
     d.x.array[:] = d_all_time[timeframe]
-    if timeframe < 1:
-        phi_1.x.array[:] = phi_1_exact.x.array
-        phi_2.x.array[:] = phi_2_exact_all_time[timeframe]
-    else:
-        phi_2.x.array[:] = phi_2.x.array - tau/2
+    # if timeframe < 1:
+    #     phi_1.x.array[:] = phi_1_exact.x.array
+    #     phi_2.x.array[:] = phi_2_exact_all_time[timeframe]
+    # else:
+    #     phi_2.x.array[:] = phi_2.x.array - tau/2
 
     # 0-order tikhonov regularization
     # phi_1_est.x.array[:] = np.zeros(phi_1.x.array.shape)
     # phi_2_est.x.array[:] = np.zeros(phi_2.x.array.shape)
 
-    if timeframe == 0:
-        phi_1_est.x.array[:] = phi_1.x.array
-        phi_2_est.x.array[:] = phi_2.x.array
-    elif timeframe == 1:
-        phi_1_est.x.array[:] = phi_1_result[timeframe-1]
-        phi_2_est.x.array[:] = phi_2_result[timeframe-1]
-    else:
-        phi_1_est.x.array[:] = phi_1_result[timeframe-1]
+    # if timeframe == 0:
+    #     phi_1_est.x.array[:] = phi_1.x.array
+    #     phi_2_est.x.array[:] = phi_2.x.array
+    # elif timeframe == 1:
+    #     phi_1_est.x.array[:] = phi_1_result[timeframe-1]
+    #     phi_2_est.x.array[:] = phi_2_result[timeframe-1]
+    # else:
+    #     phi_1_est.x.array[:] = phi_1_result[timeframe-1]
         # prior
         # phi_2_est.x.array[:] = phi_2_result[timeframe-1]
         # difference
-        phi_2_est.x.array[:] = 2 * phi_2_result[timeframe-1] - phi_2_result[timeframe-2]
+        # phi_2_est.x.array[:] = 2 * phi_2_result[timeframe-1] - phi_2_result[timeframe-2]
 
     G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
     G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
@@ -245,7 +245,7 @@ for timeframe in range(time_total):
         gamma = 0.6
         c = 0.1
         step_search = 0
-        while(step_search < 20):
+        while(True):
             # adjust p q
             phi_1.x.array[:] = phi_1_v - alpha * J_p_array
             phi_2.x.array[:] = phi_2_v - alpha * J_q_array
@@ -267,11 +267,18 @@ for timeframe in range(time_total):
             loss_new = assemble_scalar(form_loss_1) \
                 + assemble_scalar(form_loss_2)
             loss_cmp = loss_new - (loss - c * alpha * np.linalg.norm(np.concatenate((J_p.array, J_q.array)))**2)
-            if (loss_cmp < 1e-2):
-                break
             alpha = gamma * alpha
             step_search = step_search + 1
-        loss_in_timeframe.append(loss_new)
+            if (step_search > 20 or loss_cmp < 0):
+                loss = loss_new
+                with J_p.localForm() as loc_J:
+                    loc_J.set(0)
+                assemble_vector(J_p, form_J_p)
+                with J_q.localForm() as loc_J:
+                    loc_J.set(0)
+                assemble_vector(J_q, form_J_q)
+                break
+        loss_in_timeframe.append(loss)
         k = k + 1
     loss_per_timeframe.append(loss)
     phi_1_result[timeframe] = phi_1.x.array.copy()
@@ -327,7 +334,7 @@ def plot_with_time(value, title):
 p1 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_1_result < 0, 1, 0), 'ischemic'))
 p2 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_2_result < 0, 1, 0), 'activation_result'))
 p3 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_2_exact_all_time < 0, 1, 0), 'activation_exact'))
-p4 = multiprocessing.Process(target=plot_with_time, args=(v_exact_all_time, 'v'))
+p4 = multiprocessing.Process(target=plot_with_time, args=(v_exact_all_time, 'v_exact'))
 p5 = multiprocessing.Process(target=plot_loss_and_cm)
 p1.start()
 p2.start()

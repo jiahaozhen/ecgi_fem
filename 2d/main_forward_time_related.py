@@ -125,6 +125,7 @@ b_u = create_vector(linear_form_b_u)
 
 u = Function(V1)
 u_all_time = np.zeros((time_total, num_node))
+phi_1_all_time = np.zeros((time_total, sub_node_num))
 phi_2_all_time = np.zeros((time_total, sub_node_num))
 v_exact_all_time = np.zeros((time_total, sub_node_num))
 
@@ -133,22 +134,20 @@ for t in range(time_total):
     phi_2.interpolate(phi_2_exact)
     G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
     delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
-    # v.x.array[:] = (a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +\
-    #                 (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array)
-    # v_exact_all_time[t] = v.x.array.copy()
     with b_u.localForm() as loc_b:
         loc_b.set(0)
     assemble_vector(b_u, linear_form_b_u)
     solver.solve(b_u, u.vector)
+    phi_1_all_time[t] = phi_1.x.array.copy()
     phi_2_all_time[t] = phi_2.x.array.copy()
     u_all_time[t] = u.x.array.copy()
     v_exact_all_time[t] = (a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +\
                         (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array)
 
 np.save('2d/data/bsp_all_time', u_all_time)
-np.save('2d/data/phi_1', phi_1.x.array)
-np.save('2d/data/phi_2_all_time', phi_2_all_time)
-np.save('2d/data/v_exat_all_time.npy', v_exact_all_time)
+np.save('2d/data/phi_1_exact_all_time', phi_1_all_time)
+np.save('2d/data/phi_2_exact_all_time', phi_2_all_time)
+np.save('2d/data/v_exact_all_time', v_exact_all_time)
 
 v = Function(V2)
 plotter = pyvista.Plotter(shape=(2, 5))

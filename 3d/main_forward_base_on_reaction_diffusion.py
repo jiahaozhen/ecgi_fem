@@ -33,9 +33,10 @@ v_data_0_1 = compute_v_based_on_reaction_diffusion(
 v_min, v_max = -90, 10
 v_data = v_data_0_1 * (v_max - v_min) + v_min
 
+# sample data
+v_data = v_data[::5]
 u_data = forward_tmp(mesh_file, v_data, gdim = gdim)
 
-# simplify the code
 if gdim == 2:
     np.save('2d/data/u_data_reaction_diffusion.npy', u_data)
     np.save('2d/data/v_data_reaction_diffusion.npy', v_data)
