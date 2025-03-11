@@ -54,11 +54,11 @@ def plot_with_time(value, title):
         for j in range(7):
             plotter.subplot(i, j)
             grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
-            v_function.x.array[:] = value[i*14 + j*2]
+            v_function.x.array[:] = value[i*70 + j*10]
             grid.point_data[title] = eval_function(v_function, subdomain_ventricle.geometry.x)
             grid.set_active_scalars(title)
             plotter.add_mesh(grid, show_edges=True)
-            plotter.add_text(f"Time: {i*14 + j*2:.1f} ms", position='lower_right', font_size=9)
+            plotter.add_text(f"Time: {(i*70 + j*10)/5.0:.1f} ms", position='lower_right', font_size=9)
             plotter.view_xy()
             plotter.add_title(title, font_size=9)
     plotter.show()

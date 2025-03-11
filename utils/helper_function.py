@@ -124,12 +124,12 @@ def compute_phi_with_v_timebased(v, function_space, v_rest_ischemic, v_peak_isch
         else:
             phi_1[:, i] = -10
     # coordinates = function_space.tabulate_dof_coordinates()
-    # marker_ischemic = np.full_like(v, False,  dtype=bool)
+    # marker_ischemic = np.full(v.shape[1], False,  dtype=bool)
     # marker_activation  = np.full_like(v, False, dtype=bool)
     # for i in range(v.shape[1]):
     #     marker_activation[activation_time[i]:, i] = True
     #     if  (min(v[:, i]) > v_rest_ischemic - 10 and max(v[:, i]) < v_peak_ischemic + 10) :
-    #         marker_ischemic[:, i] = True
+    #         marker_ischemic[i] = True
 
     # def min_distance(coords, mask):
     #     if np.any(mask):
@@ -137,9 +137,10 @@ def compute_phi_with_v_timebased(v, function_space, v_rest_ischemic, v_peak_isch
     #     else:
     #         return np.zeros(len(coords))
     
+    # min_iso = min_distance(coordinates, marker_ischemic)
+    # min_no_iso = min_distance(coordinates, ~marker_ischemic)
     # for timeframe in range(v.shape[0]):
-    #     min_iso = min_distance(coordinates, marker_ischemic[timeframe])
-    #     min_no_iso = min_distance(coordinates, ~marker_ischemic[timeframe])
+        
     #     min_act = min_distance(coordinates, marker_activation[timeframe])
     #     min_no_act = min_distance(coordinates, ~marker_activation[timeframe])
     

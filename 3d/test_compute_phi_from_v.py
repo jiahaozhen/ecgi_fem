@@ -12,10 +12,10 @@ import multiprocessing
 sys.path.append('.')
 from utils.helper_function import compute_phi_with_v, eval_function, compute_phi_with_v_timebased
 
-mesh_file = '2d/data/heart_torso.msh'
-# mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
+# mesh_file = '2d/data/heart_torso.msh'
+mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
 # mesh of Body
-domain, cell_markers, facet_markers = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = 2)
+domain, cell_markers, facet_markers = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = 3)
 tdim = domain.topology.dim
 # mesh of Heart
 subdomain_ventricle, ventricle_to_torso, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
@@ -24,7 +24,8 @@ sub_node_num = subdomain_ventricle.topology.index_map(0).size_local
 V2 = functionspace(subdomain_ventricle, ("Lagrange", 1))
 
 # v_exact_all_time = np.load('2d/data/v_exact_all_time.npy')
-v_exact_all_time = np.load('2d/data/v_data_reaction_diffusion.npy')
+# v_exact_all_time = np.load('2d/data/v_data_reaction_diffusion.npy')
+v_exact_all_time = np.load('3d/data/v_data_reaction_diffusion.npy')
 time_total = v_exact_all_time.shape[0]
 phi_1_result = np.zeros((time_total, sub_node_num))
 phi_2_result = np.zeros((time_total, sub_node_num))
