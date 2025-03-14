@@ -275,7 +275,7 @@ for timeframe in range(time_total):
         assemble_vector(Reg_q, form_Reg_q)
         J_q.axpy(1.0, Reg_q)
         
-        # check if the condition is satisfie
+        # check if the condition is satisfied
         if (k > 1e2 or np.linalg.norm(J_p.array) < 1e-1 and np.linalg.norm(J_q.array) < 1e-1):
              break
         k = k + 1

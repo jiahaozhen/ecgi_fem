@@ -111,6 +111,6 @@ def create_mesh(target_file, lc, multi_flag=True):
     gmsh.finalize()
 
 if __name__ == '__main__':
-    lc = 20
+    lc = 40
     file = '3d/data/mesh_multi_conduct_ecgsim.msh'
     create_mesh(file, lc)
