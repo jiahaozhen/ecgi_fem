@@ -195,6 +195,26 @@ def compute_error(v_exact, phi_result):
 
     return (cm, hd, SN, SP)
 
+# function to comppare exact phi and result phi
+def compare_phi_one_timeframe(phi_exact, phi_result, coordinates = []):
+    marker_exact = np.where(phi_exact < 0, 1, 0)
+    marker_result = np.where(phi_result < 0, 1, 0)
+    cc = np.corrcoef(marker_exact, marker_result)[0, 1]
+    if coordinates != []:
+        coordinates_ischemic_exact = coordinates[np.where(marker_exact == 1)]
+        coordinates_ischemic_result = coordinates[np.where(marker_result == 1)]
+        cm1 = np.mean(coordinates_ischemic_exact, axis=0)
+        cm2 = np.mean(coordinates_ischemic_result, axis=0)
+        cm = np.linalg.norm(cm1-cm2)
+        return cc, cm
+    return cc
+
+def compare_phi(phi_exact, phi_result):
+    cc = []
+    for i in range(phi_exact.shape[0]):
+        cc.append(compare_phi_one_timeframe(phi_exact[i], phi_result[i]))
+    return np.array(cc)
+
 def compute_normal(domain):
     tdim = domain.topology.dim
     boundary_index = locate_entities_boundary(domain, tdim - 3, lambda x: np.full(x.shape[1], True, dtype=bool))

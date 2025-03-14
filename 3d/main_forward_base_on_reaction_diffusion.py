@@ -36,7 +36,6 @@ v_data = v_data_0_1 * (v_max - v_min) + v_min
 # sample data
 # v_data = v_data[::5]
 u_data = forward_tmp(mesh_file, v_data, gdim = gdim)
-# add snr = 30dB noise
 u_data += np.random.normal(0, 0.1, u_data.shape)
 
 if gdim == 2:
