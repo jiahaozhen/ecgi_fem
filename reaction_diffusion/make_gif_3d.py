@@ -13,8 +13,8 @@ sys.path.append('.')
 from utils.helper_function import eval_function
 
 submesh_flag = True
-ischemia_flag = False
-gdim = 2
+ischemia_flag = True
+gdim = 3
 if gdim == 2:
     mesh_file = '2d/data/heart_torso.msh'
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
@@ -23,8 +23,8 @@ if gdim == 2:
     T = 40
     center_activation = np.array([4.0, 4.0])
     radius_activation = 0.1
-    center_ischemic = np.array([4.0, 6.0])
-    radius_ischemic = 0.5
+    center_ischemia = np.array([4.0, 6.0])
+    radius_ischemia = 0.5
 else:
     if submesh_flag:
         mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
@@ -40,15 +40,15 @@ else:
     T = 40
     center_activation = np.array([57, 51.2, 15])
     radius_activation = 5
-    center_ischemic = np.array([89.1, 40.9, -13.3])
-    radius_ischemic = 30
+    center_ischemia = np.array([89.1, 40.9, -13.3])
+    radius_ischemia = 20
 
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
 u_data = compute_v_based_on_reaction_diffusion(
     mesh_file, T = T, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag, 
     gdim = gdim, center_activation = center_activation, radius_activation = radius_activation,
-    center_ischemic = center_ischemic, radius_ischemic = radius_ischemic
+    center_ischemia = center_ischemia, radius_ischemia = radius_ischemia
 )
 
 plotter = pyvista.Plotter()
@@ -63,7 +63,7 @@ if gdim == 2:
 else:
     name = "reaction_diffusion/u_data_3d"
 if ischemia_flag:
-    name += "_ischemic.gif"
+    name += "_ischemia.gif"
 else:
     name += "_healthy.gif"
 plotter.open_gif(name)

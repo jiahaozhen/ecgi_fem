@@ -59,14 +59,14 @@ def petsc2array(v):
     s=v.getValues(range(0, v.getSize()[0]), range(0,  v.getSize()[1]))
     return s
 
-def compute_error_with_v(v_exact, v_result, function_space, v_rest_healthy, v_rest_ischemic, v_peak_healthy, v_peak_ischemic):
+def compute_error_with_v(v_exact, v_result, function_space, v_rest_healthy, v_rest_ischemia, v_peak_healthy, v_peak_ischemia):
     #ichemic region
-    ischemic_exact_condition = ((v_exact > v_rest_ischemic-5) & (v_exact < v_rest_ischemic+5)| 
-                                (v_exact > v_peak_ischemic-5) & (v_exact < v_peak_ischemic+5))
-    marker_ischemic_exact = np.where(ischemic_exact_condition, 1, 0)
-    ischemic_result_condition = ((v_result > v_rest_ischemic-5) & (v_result < v_rest_ischemic+5)| 
-                                (v_result > v_peak_ischemic-5) & (v_result < v_peak_ischemic+5))
-    marker_ischemic_result = np.where(ischemic_result_condition, 1, 0)
+    ischemia_exact_condition = ((v_exact > v_rest_ischemia-5) & (v_exact < v_rest_ischemia+5)| 
+                                (v_exact > v_peak_ischemia-5) & (v_exact < v_peak_ischemia+5))
+    marker_ischemia_exact = np.where(ischemia_exact_condition, 1, 0)
+    ischemia_result_condition = ((v_result > v_rest_ischemia-5) & (v_result < v_rest_ischemia+5)| 
+                                (v_result > v_peak_ischemia-5) & (v_result < v_peak_ischemia+5))
+    marker_ischemia_result = np.where(ischemia_result_condition, 1, 0)
     #activate region
     activate_exact_condition = v_exact > (v_peak_healthy + v_rest_healthy)/2
     marker_activate_exact = np.where(activate_exact_condition, 1, 0)
@@ -74,25 +74,25 @@ def compute_error_with_v(v_exact, v_result, function_space, v_rest_healthy, v_re
     marker_activate_result = np.where(activate_result_condition, 1, 0)
 
     coordinates = function_space.tabulate_dof_coordinates()
-    coordinates_ischemic_exact = coordinates[np.where(marker_ischemic_exact == 1)]
-    coordinates_ischemic_result = coordinates[np.where(marker_ischemic_result == 1)]
+    coordinates_ischemia_exact = coordinates[np.where(marker_ischemia_exact == 1)]
+    coordinates_ischemia_result = coordinates[np.where(marker_ischemia_result == 1)]
     coordinates_activate_exact = coordinates[np.where(marker_activate_exact == 1)]
     coordinates_activate_result = coordinates[np.where(marker_activate_result == 1)]
 
-    cm_ischemic_exact = np.mean(coordinates_ischemic_exact, axis=0)
-    cm_ischemic_result = np.mean(coordinates_ischemic_result, axis=0)
+    cm_ischemia_exact = np.mean(coordinates_ischemia_exact, axis=0)
+    cm_ischemia_result = np.mean(coordinates_ischemia_result, axis=0)
     cm_activate_exact = np.mean(coordinates_activate_exact, axis=0)
     cm_activate_result = np.mean(coordinates_activate_result, axis=0)
 
-    cm_error_ischemic = np.linalg.norm(cm_ischemic_exact-cm_ischemic_result)   
+    cm_error_ischemia = np.linalg.norm(cm_ischemia_exact-cm_ischemia_result)   
     cm_error_activate = np.linalg.norm(cm_activate_exact-cm_activate_result)
 
-    return (cm_error_ischemic, cm_error_activate)
+    return (cm_error_ischemia, cm_error_activate)
 
-def compute_phi_with_v(v, function_space, v_rest_healthy, v_rest_ischemic, v_peak_healthy, v_peak_ischemic):
+def compute_phi_with_v(v, function_space, v_rest_healthy, v_rest_ischemia, v_peak_healthy, v_peak_ischemia):
     coordinates = function_space.tabulate_dof_coordinates()
-    marker_ischemic = (((v > v_rest_ischemic - 5) & (v < v_rest_ischemic + 5)) |
-                       ((v > v_peak_ischemic - 5) & (v < v_peak_ischemic + 5)))
+    marker_ischemia = (((v > v_rest_ischemia - 5) & (v < v_rest_ischemia + 5)) |
+                       ((v > v_peak_ischemia - 5) & (v < v_peak_ischemia + 5)))
     marker_activate = v > ((v_peak_healthy + v_rest_healthy) / 2)
     
     def min_distance(coords, mask):
@@ -101,17 +101,17 @@ def compute_phi_with_v(v, function_space, v_rest_healthy, v_rest_ischemic, v_pea
         else:
             return np.zeros(len(coords))
     
-    min_iso = min_distance(coordinates, marker_ischemic)
-    min_no_iso = min_distance(coordinates, ~marker_ischemic)
+    min_iso = min_distance(coordinates, marker_ischemia)
+    min_no_iso = min_distance(coordinates, ~marker_ischemia)
     min_act = min_distance(coordinates, marker_activate)
     min_no_act = min_distance(coordinates, ~marker_activate)
     
-    phi_1 = np.where(marker_ischemic, -min_no_iso, min_iso)
+    phi_1 = np.where(marker_ischemia, -min_no_iso, min_iso)
     phi_2 = np.where(marker_activate, -min_no_act, min_act)
 
     return phi_1, phi_2
 
-def compute_phi_with_v_timebased(v, function_space, v_rest_ischemic, v_peak_ischemic):
+def compute_phi_with_v_timebased(v, function_space, v_rest_ischemia, v_peak_ischemia):
     phi_1 = np.full_like(v, 0)
     phi_2 = np.full_like(v, 0)
     activation_time = get_activation_time_from_v(v)
@@ -119,17 +119,17 @@ def compute_phi_with_v_timebased(v, function_space, v_rest_ischemic, v_peak_isch
     for i in range(v.shape[1]):
         phi_2[:activation_time[i], i] = 10
         phi_2[activation_time[i]:, i] = -10
-        if  (min(v[:, i]) < v_rest_ischemic - 10 or max(v[:, i]) > v_peak_ischemic + 10) :
+        if  (min(v[:, i]) < v_rest_ischemia - 10 or max(v[:, i]) > v_peak_ischemia + 10) :
             phi_1[:, i] = 10
         else:
             phi_1[:, i] = -10
     # coordinates = function_space.tabulate_dof_coordinates()
-    # marker_ischemic = np.full(v.shape[1], False,  dtype=bool)
+    # marker_ischemia = np.full(v.shape[1], False,  dtype=bool)
     # marker_activation  = np.full_like(v, False, dtype=bool)
     # for i in range(v.shape[1]):
     #     marker_activation[activation_time[i]:, i] = True
-    #     if  (min(v[:, i]) > v_rest_ischemic - 10 and max(v[:, i]) < v_peak_ischemic + 10) :
-    #         marker_ischemic[i] = True
+    #     if  (min(v[:, i]) > v_rest_ischemia - 10 and max(v[:, i]) < v_peak_ischemia + 10) :
+    #         marker_ischemia[i] = True
 
     # def min_distance(coords, mask):
     #     if np.any(mask):
@@ -137,14 +137,14 @@ def compute_phi_with_v_timebased(v, function_space, v_rest_ischemic, v_peak_isch
     #     else:
     #         return np.zeros(len(coords))
     
-    # min_iso = min_distance(coordinates, marker_ischemic)
-    # min_no_iso = min_distance(coordinates, ~marker_ischemic)
+    # min_iso = min_distance(coordinates, marker_ischemia)
+    # min_no_iso = min_distance(coordinates, ~marker_ischemia)
     # for timeframe in range(v.shape[0]):
         
     #     min_act = min_distance(coordinates, marker_activation[timeframe])
     #     min_no_act = min_distance(coordinates, ~marker_activation[timeframe])
     
-    #     phi_1[timeframe] = np.where(marker_ischemic[timeframe], -min_no_iso, min_iso)
+    #     phi_1[timeframe] = np.where(marker_ischemia[timeframe], -min_no_iso, min_iso)
     #     phi_2[timeframe] = np.where(marker_activation[timeframe], -min_no_act, min_act)
 
     return phi_1, phi_2
@@ -156,24 +156,24 @@ def compute_error(v_exact, phi_result):
     marker_result[phi_result.x.array < 0] = 1
 
     coordinates = v_exact.function_space.tabulate_dof_coordinates()
-    coordinates_ischemic_exact = coordinates[np.where(marker_exact == 1)]
-    coordinates_ischemic_result = coordinates[np.where(marker_result == 1)]
+    coordinates_ischemia_exact = coordinates[np.where(marker_exact == 1)]
+    coordinates_ischemia_result = coordinates[np.where(marker_result == 1)]
 
-    cm1 = np.mean(coordinates_ischemic_exact, axis=0)
-    cm2 = np.mean(coordinates_ischemic_result, axis=0)
+    cm1 = np.mean(coordinates_ischemia_exact, axis=0)
+    cm2 = np.mean(coordinates_ischemia_result, axis=0)
     cm = np.linalg.norm(cm1-cm2)
 
-    if (coordinates_ischemic_result.size == 0):
+    if (coordinates_ischemia_result.size == 0):
         return (cm, None, None, None)
     
     # HaussDist
     hdxy = 0
-    for coordinate in coordinates_ischemic_exact:
-        hdy = np.min(np.linalg.norm(coordinate - coordinates_ischemic_result, axis=1))
+    for coordinate in coordinates_ischemia_exact:
+        hdy = np.min(np.linalg.norm(coordinate - coordinates_ischemia_result, axis=1))
         hdxy = max(hdxy, hdy)
     hdyx = 0
-    for coordinate in coordinates_ischemic_result:
-        hdx = np.min(np.linalg.norm(coordinate - coordinates_ischemic_exact, axis=1))
+    for coordinate in coordinates_ischemia_result:
+        hdx = np.min(np.linalg.norm(coordinate - coordinates_ischemia_exact, axis=1))
         hdyx = max(hdyx, hdx)
     hd = max(hdxy, hdyx)
 
@@ -201,18 +201,18 @@ def compare_phi_one_timeframe(phi_exact, phi_result, coordinates = []):
     marker_result = np.where(phi_result < 0, 1, 0)
     cc = np.corrcoef(marker_exact, marker_result)[0, 1]
     if coordinates != []:
-        coordinates_ischemic_exact = coordinates[np.where(marker_exact == 1)]
-        coordinates_ischemic_result = coordinates[np.where(marker_result == 1)]
-        cm1 = np.mean(coordinates_ischemic_exact, axis=0)
-        cm2 = np.mean(coordinates_ischemic_result, axis=0)
+        coordinates_ischemia_exact = coordinates[np.where(marker_exact == 1)]
+        coordinates_ischemia_result = coordinates[np.where(marker_result == 1)]
+        cm1 = np.mean(coordinates_ischemia_exact, axis=0)
+        cm2 = np.mean(coordinates_ischemia_result, axis=0)
         cm = np.linalg.norm(cm1-cm2)
         return cc, cm
     return cc
 
-def compare_phi(phi_exact, phi_result):
+def compute_cc(exact, result):
     cc = []
-    for i in range(phi_exact.shape[0]):
-        cc.append(compare_phi_one_timeframe(phi_exact[i], phi_result[i]))
+    for i in range(exact.shape[0]):
+        cc.append(compare_phi_one_timeframe(exact[i], result[i]))
     return np.array(cc)
 
 def compute_normal(domain):

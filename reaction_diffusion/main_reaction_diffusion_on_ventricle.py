@@ -10,11 +10,11 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
-def compute_v_based_on_reaction_diffusion(mesh_file, gdim = 3, T = 100, step_per_timeframe = 5, 
-                                          u_peak_ischemic_val = 0.7, u_rest_ischemic_val = 0.3,
-                                          submesh_flag = False, ischemia_flag = False, 
-                                          center_activation = np.array([57, 51.2, 15]), radius_activation = 5,
-                                          center_ischemic = np.array([89.1, 40.9, -13.3]), radius_ischemic = 30):
+def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_timeframe=5, 
+                                          u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3,
+                                          submesh_flag=False, ischemia_flag=False, 
+                                          center_activation=np.array([57, 51.2, 15]), radius_activation=5,
+                                          center_ischemia=np.array([89.1, 40.9, -13.3]), radius_ischemia=30):
     
     if submesh_flag:
         # mesh of Body
@@ -61,8 +61,8 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim = 3, T = 100, step_per
     # node 17 coordinates: (89.1, 40.9, -13.3)
     # node_17 = np.array([89.1, 40.9, -13.3])
     class ischemia_condition():
-        def __init__(self, u_ischemic, u_healthy, center = center_ischemic, r = radius_ischemic):
-            self.u_ischemic = u_ischemic
+        def __init__(self, u_ischemia, u_healthy, center = center_ischemia, r = radius_ischemia):
+            self.u_ischemia = u_ischemia
             self.u_healthy = u_healthy
             self.center = center
             self.r = r
@@ -71,21 +71,21 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim = 3, T = 100, step_per
                 return np.where((x[0]-self.center[0])**2 + 
                                 (x[1]-self.center[1])**2 +
                                 (x[2]-self.center[2])**2 < self.r**2, 
-                                self.u_ischemic, self.u_healthy)
+                                self.u_ischemia, self.u_healthy)
             else:
                 return np.where((x[0]-self.center[0])**2 + 
                                 (x[1]-self.center[1])**2 < self.r**2, 
-                                self.u_ischemic, self.u_healthy)
+                                self.u_ischemia, self.u_healthy)
     
     # the earliest node: 146
     # node 146 coordinates: (57, 51.2, 15)
     # node_146 = np.array([57, 51.2, 15])
     class activation_initial_condition():
-        def __init__(self, u_peak_ischemic, u_rest_ischemic, u_peak_healthy = 1, u_rest_healthy = 0, 
-                    center_a = center_activation, r_a = radius_activation, center_i = center_ischemic, r_i = radius_ischemic):
-            self.u_peak_ischemic = u_peak_ischemic
+        def __init__(self, u_peak_ischemia, u_rest_ischemia, u_peak_healthy = 1, u_rest_healthy = 0, 
+                    center_a = center_activation, r_a = radius_activation, center_i = center_ischemia, r_i = radius_ischemia):
+            self.u_peak_ischemia = u_peak_ischemia
             self.u_peak_healthy = u_peak_healthy
-            self.u_rest_ischemic = u_rest_ischemic
+            self.u_rest_ischemia = u_rest_ischemia
             self.u_rest_healthy = u_rest_healthy
             self.center_a = center_a
             self.r_a = r_a
@@ -100,29 +100,29 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim = 3, T = 100, step_per
                 condition2 = (x[0]-self.center_i[0])**2 + (x[1]-self.center_i[1])**2 < self.r_i**2
             
             if ischemia_flag:
-                return np.where(condition1 & condition2, self.u_peak_ischemic,
-                                np.where( ~condition1 & condition2, self.u_rest_ischemic,
+                return np.where(condition1 & condition2, self.u_peak_ischemia,
+                                np.where( ~condition1 & condition2, self.u_rest_ischemia,
                                             np.where( ~condition1 & ~condition2, self.u_rest_healthy, self.u_peak_healthy)))
             else:
                 return np.where(condition1, self.u_peak_healthy, self.u_rest_healthy)
 
     if ischemia_flag:
         u_peak = Function(V)
-        u_peak.interpolate(ischemia_condition(u_peak_ischemic_val, 1))
+        u_peak.interpolate(ischemia_condition(u_peak_ischemia_val, 1))
         u_rest = Function(V)
-        u_rest.interpolate(ischemia_condition(u_rest_ischemic_val, 0))
+        u_rest.interpolate(ischemia_condition(u_rest_ischemia_val, 0))
     else:
         u_peak = 1
         u_rest = 0
     
     u_n = Function(V)
-    u_n.interpolate(activation_initial_condition(u_peak_ischemic_val, u_rest_ischemic_val))
+    u_n.interpolate(activation_initial_condition(u_peak_ischemia_val, u_rest_ischemia_val))
 
     v_n = Function(V)
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
 
     uh = Function(V)
-    uh.interpolate(activation_initial_condition(u_peak_ischemic_val, u_rest_ischemic_val))
+    uh.interpolate(activation_initial_condition(u_peak_ischemia_val, u_rest_ischemia_val))
 
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)

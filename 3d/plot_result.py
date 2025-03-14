@@ -37,17 +37,27 @@ sub_node_num = subdomain_ventricle.topology.index_map(0).size_local
 V2 = functionspace(subdomain_ventricle, ("Lagrange", 1))
 phi_1_exact, phi_2_exact = compute_phi_with_v_timebased(v_exact, V2, -60, -20)
 
-cc = []
+cc_v = []
 for i in range(v_exact.shape[0]):
     # cc of v_exact and v_result
-    cc.append(np.corrcoef(v_exact[i], v_result[i])[0, 1])
-cc = np.array(cc)
+    cc_v.append(np.corrcoef(v_exact[i], v_result[i])[0, 1])
+cc = np.array(cc_v)
 
-def plot_cc():
+cc_phi_1 = []
+for i in range(phi_1_exact.shape[0]):
+    cc_phi_1.append(np.corrcoef(phi_1_exact[i], phi_1_result[i])[0, 1])
+cc = np.array(cc_phi_1)
+
+cc_phi_2 = []
+for i in range(phi_2_exact.shape[0]):
+    cc_phi_2.append(np.corrcoef(phi_2_exact[i], phi_2_result[i])[0, 1])
+cc = np.array(cc_phi_2)
+
+def plot_cc(cc, title):
     plt.plot(np.linspace(0, 40, 201), cc)
     plt.xlabel('Time')
     plt.ylabel('Correlation Coefficient')
-    plt.title('Correlation Coefficient between v_exact and v_result')
+    plt.title('Correlation Coefficient of ' + title)
     plt.show()
 
 def plot_with_time(value, title):
@@ -66,13 +76,15 @@ def plot_with_time(value, title):
             plotter.add_title(title, font_size=9)
     plotter.show()
 
-p1 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_1_result < 0, 1, 0), 'ischemic_result'))
+p1 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_1_result < 0, 1, 0), 'ischemia_result'))
 p2 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_2_result < 0, 1, 0), 'activation_result'))
-p3 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_1_exact < 0, 1, 0), 'ischemic_exact'))
+p3 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_1_exact < 0, 1, 0), 'ischemia_exact'))
 p4 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_2_exact < 0, 1, 0), 'activation_exact'))
 p5 = multiprocessing.Process(target=plot_with_time, args=(v_result, 'v_result'))
 p6 = multiprocessing.Process(target=plot_with_time, args=(v_exact, 'v_exact'))
-p7 = multiprocessing.Process(target=plot_cc)
+p7 = multiprocessing.Process(target=plot_cc, args=(cc_v, 'v'))
+p8 = multiprocessing.Process(target=plot_cc, args=(cc_phi_1, 'phi_1'))
+p9 = multiprocessing.Process(target=plot_cc, args=(cc_phi_2, 'phi_2'))
 p1.start()
 p2.start()
 p3.start()
@@ -80,6 +92,8 @@ p4.start()
 p5.start()
 p6.start()
 p7.start()
+p8.start()
+p9.start()
 p1.join()
 p2.join()
 p3.join()
@@ -87,3 +101,5 @@ p4.join()
 p5.join()
 p6.join()
 p7.join()
+p8.join()
+p9.join()

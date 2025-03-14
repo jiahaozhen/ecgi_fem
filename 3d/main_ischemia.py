@@ -12,13 +12,15 @@ from petsc4py import PETSc
 import numpy as np
 import matplotlib.pyplot as plt
 import pyvista
+import multiprocessing
 
 sys.path.append('.')
 from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval_function
 
 def resting_ischemia_inversion(mesh_file, d_data, 
                                      gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
-                                     a1=-60, a2=-90, tau=1, v_exact_file='3d/data/v.npy',
+                                     ischemia_potential=-60, normal_potential=-90, 
+                                     tau=1, v_exact_file='3d/data/v.npy',
                                      multi_flag=True, plot_flag=False, exact_flag=False):
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
@@ -91,7 +93,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
 
     # vector b_u
     dx2 = Measure("dx",domain=subdomain_ventricle)
-    b_u_element = (a1 - a2) * delta_phi * dot(grad(u1), dot(Mi, grad(phi))) * dx2
+    b_u_element = (ischemia_potential - normal_potential) * delta_phi * dot(grad(u1), dot(Mi, grad(phi))) * dx2
     entity_map = {domain._cpp_object: ventricle_to_torso}
     linear_form_b_u = form(b_u_element, entity_maps=entity_map)
     b_u = create_vector(linear_form_b_u)
@@ -114,8 +116,8 @@ def resting_ischemia_inversion(mesh_file, d_data,
 
     # vector direction
     u2 = TestFunction(V2)
-    j_p = (a1 - a2) * delta_deri_phi * u2 * dot(grad(w), dot(Mi, grad(phi))) * dx2 \
-            + (a1 - a2) * delta_phi * dot(grad(w), dot(Mi, grad(u2))) * dx2
+    j_p = (ischemia_potential - normal_potential) * delta_deri_phi * u2 * dot(grad(w), dot(Mi, grad(phi))) * dx2 \
+            + (ischemia_potential - normal_potential) * delta_phi * dot(grad(w), dot(Mi, grad(u2))) * dx2
     form_J_p = form(j_p, entity_maps=entity_map)
     J_p = create_vector(form_J_p)
 
@@ -149,7 +151,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
         loss = assemble_scalar(form_loss)
         loss_per_iter.append(loss)
         if exact_flag == True:
-            cm_cmp_per_iter.append(compute_error(v_exact, phi)[0]/134.04)
+            cm_cmp_per_iter.append(compute_error(v_exact, phi)[0])
 
         # get w from u
         with b_w.localForm() as loc_w:
@@ -161,9 +163,9 @@ def resting_ischemia_inversion(mesh_file, d_data,
             loc_J.set(0)
         assemble_vector(J_p, form_J_p)
         
-        print('iteration:', k)
-        print('loss:', loss)
-        print(k, 'J_p', np.linalg.norm(J_p.array))
+        # print('iteration:', k)
+        # print('loss:', loss)
+        # print(k, 'J_p', np.linalg.norm(J_p.array))
         if exact_flag == True:
             print('center of mass error:', compute_error(v_exact, phi)[0])
         # check if the condition is satisfied
@@ -203,8 +205,8 @@ def resting_ischemia_inversion(mesh_file, d_data,
         # print("end line search")
 
     if plot_flag == False:
-        return phi
-    np.save('3d/data/phi_result.npy', phi)
+        return phi.x.array
+    np.save('3d/data/phi_result.npy', phi.x.array)
 
     plt.figure(figsize=(10, 8))
     plt.subplot(1, 2, 1)
@@ -222,27 +224,28 @@ def resting_ischemia_inversion(mesh_file, d_data,
     marker_val[phi.x.array < 0] = 1
     marker.x.array[:] = marker_val
 
-    grid1 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
-    grid1.point_data["v"] = eval_function(v_exact, subdomain_ventricle.geometry.x)
-    grid1.set_active_scalars("v")
-    grid2 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
-    grid2.point_data["marker"] = eval_function(marker, subdomain_ventricle.geometry.x)
-    grid2.set_active_scalars("marker")
-    grid3 = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
-    grid3.point_data["phi"] = eval_function(phi, subdomain_ventricle.geometry.x)
-    grid3.set_active_scalars("phi")
-    grid = (grid1, grid2, grid3)
-
-    plotter = pyvista.Plotter(shape=(1, 2))
-    for i in range(2):
-        plotter.subplot(0, i)
-        plotter.add_mesh(grid[i], show_edges=True)
+    def plot_f_on_subdomain(f, subdomain, title):
+        grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
+        grid.point_data["f"] = eval_function(f, subdomain.geometry.x)
+        grid.set_active_scalars("f")
+        plotter = pyvista.Plotter()
+        plotter.add_mesh(grid, show_edges=True)
+        plotter.add_title(title)
         plotter.view_xy()
         plotter.add_axes()
-    plotter.show()
+        plotter.show()
+
+    p1 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker, subdomain_ventricle, 'ischemia_result'))
+    p1.start()
+    if (exact_flag == True):
+        p2 = multiprocessing.Process(target=plot_f_on_subdomain, args=(v_exact, subdomain_ventricle, 'ischemia_exact'))
+        p2.start()
+        p2.join()
+    p1.join()
     return phi
 
 if __name__ == '__main__':
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
-    d = np.load('3d/data/d.npy')
-    resting_ischemia_inversion(mesh_file, d, plot_flag=True, exact_flag=True)
+    # d = np.load('3d/data/d.npy')
+    d = np.load('3d/data/u_data_reaction_diffusion.npy')[0]
+    resting_ischemia_inversion(mesh_file, d, plot_flag=True, exact_flag=False)
