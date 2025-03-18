@@ -1,3 +1,5 @@
+import sys
+
 from dolfinx.io import gmshio
 from dolfinx.mesh import create_submesh
 from dolfinx.fem import functionspace, Function, form
@@ -8,14 +10,17 @@ from petsc4py import PETSc
 import h5py
 import matplotlib.pyplot as plt
 import scipy.interpolate
-
 import numpy as np
+
+sys.path.append('.')
+from utils.helper_function import v_data_argument
 
 def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_timeframe=5, 
                                           u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3,
                                           submesh_flag=False, ischemia_flag=False, 
                                           center_activation=np.array([57, 51.2, 15]), radius_activation=5,
-                                          center_ischemia=np.array([89.1, 40.9, -13.3]), radius_ischemia=30):
+                                          center_ischemia=np.array([89.1, 40.9, -13.3]), radius_ischemia=30,
+                                          data_argument=False, v_min=-90, v_max=10):
     
     if submesh_flag:
         # mesh of Body
@@ -179,7 +184,11 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
         u_data.append(u_n.x.array.copy())
         # print(i, '/', num_steps)
 
-    return np.array(u_data)
+    u_data = np.array(u_data)
+    u_data = u_data * (v_max - v_min) + v_min
+    if data_argument:
+        u_data = v_data_argument(u_data, function_space=V)
+    return u_data
 
 if __name__ == '__main__':
     submesh_flag = False

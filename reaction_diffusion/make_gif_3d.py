@@ -10,7 +10,7 @@ import numpy as np
 from main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
 
 sys.path.append('.')
-from utils.helper_function import eval_function, v_data_argument
+from utils.helper_function import eval_function
 
 submesh_flag = True
 ischemia_flag = True
@@ -46,14 +46,11 @@ else:
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
 u_data = compute_v_based_on_reaction_diffusion(
-    mesh_file, T = T, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag, 
+    mesh_file, T = T, submesh_flag = submesh_flag, ischemia_flag = ischemia_flag, 
     gdim = gdim, center_activation = center_activation, radius_activation = radius_activation,
-    center_ischemia = center_ischemia, radius_ischemia = radius_ischemia
+    center_ischemia = center_ischemia, radius_ischemia = radius_ischemia,
+    data_argument = True
 )
-u_max = 10
-u_min = -90
-u_data = u_data * (u_max - u_min) + u_min
-u_data = v_data_argument(u_data)
 
 plotter = pyvista.Plotter()
 grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))

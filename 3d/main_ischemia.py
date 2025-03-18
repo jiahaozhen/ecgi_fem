@@ -172,10 +172,10 @@ def resting_ischemia_inversion(mesh_file, d_data,
                 loc_R.set(0)
         assemble_vector(Reg_p, form_Reg_p)
         J_p = J_p + Reg_p
-        # print('iteration:', k)
-        # print('loss_residual:', assemble_scalar(form_loss))
-        # print('loss_reg:', assemble_scalar(form_reg))
-        # print(k, 'J_p', np.linalg.norm(J_p.array))
+        print('iteration:', k)
+        print('loss_residual:', assemble_scalar(form_loss))
+        print('loss_reg:', assemble_scalar(form_reg))
+        print(k, 'J_p', np.linalg.norm(J_p.array))
         if exact_flag == True:
             print('center of mass error:', compute_error(v_exact, phi)[0])
         # check if the condition is satisfied
@@ -258,4 +258,5 @@ if __name__ == '__main__':
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
     # d = np.load('3d/data/d.npy')
     d = np.load('3d/data/u_data_reaction_diffusion.npy')[0]
-    resting_ischemia_inversion(mesh_file, d, v_exact_file='3d/data/v_data_reaction_diffusion.npy', plot_flag=True, exact_flag=True)
+    v_exact_file = '3d/data/v_data_reaction_diffusion.npy'
+    resting_ischemia_inversion(mesh_file, d, plot_flag=True, exact_flag=True, v_exact_file=v_exact_file)
