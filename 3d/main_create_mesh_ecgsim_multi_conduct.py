@@ -24,17 +24,17 @@ def create_mesh(target_file, lc, multi_flag=True):
     geom_llung = geom_data['geom_llung']
     geom_rlung = geom_data['geom_rlung']
 
-    geom_thorax_fac = np.array(geom_thorax['fac'], dtype = np.int32) - 1
+    geom_thorax_fac = np.array(geom_thorax['fac'], dtype=np.int32) - 1
     geom_thorax_pts = np.array(geom_thorax['pts'])
-    geom_ventricle_fac = np.array(geom_ventricle['fac'], dtype = np.int32) - 1
+    geom_ventricle_fac = np.array(geom_ventricle['fac'], dtype=np.int32) - 1
     geom_ventricle_pts = np.array(geom_ventricle['pts'])
-    geom_llung_fac = np.array(geom_llung['fac'], dtype = np.int32) - 1
+    geom_llung_fac = np.array(geom_llung['fac'], dtype=np.int32) - 1
     geom_llung_pts = np.array(geom_llung['pts'])
-    geom_rlung_fac = np.array(geom_rlung['fac'], dtype = np.int32) - 1
+    geom_rlung_fac = np.array(geom_rlung['fac'], dtype=np.int32) - 1
     geom_rlung_pts = np.array(geom_rlung['pts'])
-    geom_lcav_fac = np.array(geom_lcav['fac'], dtype = np.int32) - 1
+    geom_lcav_fac = np.array(geom_lcav['fac'], dtype=np.int32) - 1
     geom_lcav_pts = np.array(geom_lcav['pts'])
-    geom_rcav_fac = np.array(geom_rcav['fac'], dtype = np.int32) - 1
+    geom_rcav_fac = np.array(geom_rcav['fac'], dtype=np.int32) - 1
     geom_rcav_pts = np.array(geom_rcav['pts'])
 
     def model_made_points(p, pindex):
@@ -69,9 +69,9 @@ def create_mesh(target_file, lc, multi_flag=True):
         model_rcav = model_made_points(geom_rcav_pts, geom_rcav_fac)
 
         gmsh.model.occ.cut([(3, model_thorax)], [(3, model_ventricle), (3, model_lcav), (3, model_rcav), 
-                                                (3, model_llung), (3, model_rlung)], tag = 7, removeTool = False)
+                                                 (3, model_llung), (3, model_rlung)], tag=7, removeTool=False)
         gmsh.model.occ.fragment([(3, 7)], [(3, model_ventricle), 
-                                        (3, model_lcav), (3, model_rcav), (3, model_llung), (3, model_rlung)])
+                                           (3, model_lcav), (3, model_rcav), (3, model_llung), (3, model_rlung)])
 
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(3, [7], 1)  # Torso as physical group 1
@@ -79,7 +79,7 @@ def create_mesh(target_file, lc, multi_flag=True):
         gmsh.model.addPhysicalGroup(3, [model_llung, model_rlung], 3) # Lung as physical group 3
         gmsh.model.addPhysicalGroup(3, [model_lcav, model_rcav], 4) # Cav as physical group 4
     else:
-        gmsh.model.occ.cut([(3, model_thorax)], [(3, model_ventricle)], tag = 7, removeTool = False)
+        gmsh.model.occ.cut([(3, model_thorax)], [(3, model_ventricle)], tag=7, removeTool=False)
         gmsh.model.occ.fragment([(3, 7)], [(3, model_ventricle)])
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(3, [7], 1)  # Torso as physical group 1

@@ -49,7 +49,7 @@ def ecgsim2fem(mesh_file, ischemic=False, t=39, plot_flag=False):
     d_data_ecgsim = np.array(file_ecgsim['surface_potential'])
 
     v_pts_fem = V2.tabulate_dof_coordinates()
-    d_index = locate_entities_boundary(domain, tdim-3, lambda x: np.full(x.shape[1], True, dtype=bool))
+    d_index = locate_entities_boundary(domain, tdim - 3, lambda x: np.full(x.shape[1], True, dtype=bool))
     d_pts_fem = V1.tabulate_dof_coordinates()[d_index]
 
     v_data_fem = []
