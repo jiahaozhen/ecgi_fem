@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 
 sys.path.append('.')
-from utils.helper_function import G_tau, delta_tau, delta_deri_tau, compute_error_with_v, eval_function, compute_phi_with_v_timebased
+from utils.helper_function import G_tau, delta_tau, delta_deri_tau, compute_error_with_v, eval_function
 
 def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
                        a1=-90, a2=-60, a3=10, a4=-20, 
@@ -25,7 +25,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
                        plot_flag=False, print_message=False):
 
     # mesh of Body
-    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
     # mesh of Heart
     subdomain_ventricle, ventricle_to_torso, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
@@ -132,11 +132,10 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
 
     # vector direction
     u2 = TestFunction(V2)
-    residual_p = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
-            - (a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
-            - (a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
-            - (a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
-            - (a3 - a4) * delta_phi_1 * (1 - G_phi_2) * dot(grad(w), dot(Mi, grad(u2))) * dx2
+    residual_p = (-(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 
+                  - (a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 
+                  - (a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 
+                  - (a3 - a4) * delta_phi_1 * (1 - G_phi_2) * dot(grad(w), dot(Mi, grad(u2))) * dx2)
     reg_p_1 = alpha1 * (phi_1 - phi_1_est) * u2 * dx2
     reg_p_2 = derivative(alpha3 * delta_phi_1 * sqrt(inner(grad(phi_1), grad(phi_1)) + 1e-8) * dx2, phi_1, u2)
     form_Residual_p = form(residual_p, entity_maps=entity_map)
@@ -144,11 +143,11 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
     J_p = create_vector(form_Residual_p)
     Reg_p = create_vector(form_Reg_p)
 
-    residual_q = -(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 \
-            - (a1 - a3) * delta_deri_phi_2 * G_phi_1 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
-            - (a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 \
-            - (a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 \
-            - (a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2
+    residual_q = (-(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 
+                  - (a1 - a3) * delta_deri_phi_2 * G_phi_1 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 
+                  - (a1 - a3) * delta_phi_2 * G_phi_1 * dot(grad(w), dot(Mi, grad(u2))) * dx2 
+                  - (a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 
+                  - (a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2)
     reg_q_1 = alpha2 * phi_2_mono * phi_2_I * u2 * dx2
     reg_q_2 = derivative(alpha3 * delta_phi_2 * sqrt(inner(grad(phi_2), grad(phi_2)) + 1e-8) * dx2, phi_2, u2)
     form_Residual_q = form(residual_q, entity_maps=entity_map)
@@ -158,7 +157,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
 
     # initial phi_1
     phi_1_init = resting_ischemia_inversion(mesh_file, d_data=d_data[0], gdim=gdim,
-                            ischemia_potential=a2, normal_potential=a1, tau=tau)
+                                            ischemia_potential=a2, normal_potential=a1, tau=tau)
     #initial phi_2
     phi_1.x.array[:] = np.where(phi_1_init < 0, -tau/2, tau/2)
     phi_2.x.array[:] = np.full(phi_1.x.array.shape, tau/2)
@@ -198,8 +197,8 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
         # prepare to compute u from phi_1 phi_2
         G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
         G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
-        v.x.array[:] = (a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + \
-                    (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array)
+        v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + 
+                        (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
 
         # get u from v
         with b_u.localForm() as loc_b:
@@ -219,7 +218,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
             delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
             delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
             phi_2_mono.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0, 
-                                            phi_2.x.array - phi_2_est.x.array, 0)
+                                             phi_2.x.array - phi_2_est.x.array, 0)
             phi_2_I.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0, 1, 0)
 
             # cost function
@@ -273,8 +272,8 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
                 # get u from p, q
                 G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
                 G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
-                v.x.array[:] = (a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + \
-                    (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array)
+                v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + 
+                                (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
                 with b_u.localForm() as loc_b:
                     loc_b.set(0)
                 assemble_vector(b_u, linear_form_b_u)
@@ -286,7 +285,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
                 # compute loss
                 loss_new = assemble_scalar(form_loss) + assemble_scalar(form_reg)
                 loss_cmp = loss_new - (loss + c * alpha * np.concatenate((J_p.array, J_q.array))
-                                    .dot(np.concatenate((dir_p, dir_q))))
+                                       .dot(np.concatenate((dir_p, dir_q))))
                 alpha = gamma * alpha
                 step_search = step_search + 1
                 if (step_search > 20 or loss_cmp < 0):

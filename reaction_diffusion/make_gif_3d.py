@@ -17,7 +17,7 @@ ischemia_flag = True
 gdim = 3
 if gdim == 2:
     mesh_file = '2d/data/heart_torso.msh'
-    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
     T = 40
@@ -29,13 +29,13 @@ else:
     if submesh_flag:
         mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
         # mesh of Body
-        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
+        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
         tdim = domain.topology.dim
         # mesh of Heart
         subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
     else:
         mesh_file = '3d/data/mesh_ecgsim_ventricle.msh'
-        subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
+        subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
         tdim = subdomain_ventricle.topology.dim
     T = 40
     center_activation = np.array([57, 51.2, 15])
@@ -46,10 +46,10 @@ else:
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
 u_data = compute_v_based_on_reaction_diffusion(
-    mesh_file, T = T, submesh_flag = submesh_flag, ischemia_flag = ischemia_flag, 
-    gdim = gdim, center_activation = center_activation, radius_activation = radius_activation,
-    center_ischemia = center_ischemia, radius_ischemia = radius_ischemia,
-    data_argument = True
+    mesh_file, T=T, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag, 
+    gdim=gdim, center_activation=center_activation, radius_activation=radius_activation,
+    center_ischemia=center_ischemia, radius_ischemia=radius_ischemia,
+    data_argument=False, surface_flag=True
 )
 
 plotter = pyvista.Plotter()

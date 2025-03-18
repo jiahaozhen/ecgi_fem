@@ -20,16 +20,17 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
                                           submesh_flag=False, ischemia_flag=False, 
                                           center_activation=np.array([57, 51.2, 15]), radius_activation=5,
                                           center_ischemia=np.array([89.1, 40.9, -13.3]), radius_ischemia=30,
-                                          data_argument=False, v_min=-90, v_max=10):
+                                          data_argument=False, v_min=-90, v_max=10,
+                                          surface_flag=False):
     
     if submesh_flag:
         # mesh of Body
-        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
+        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
         tdim = domain.topology.dim
         # mesh of Heart
         subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
     else:
-        subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
+        subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
 
     t = 0
     num_steps = T * step_per_timeframe
@@ -62,18 +63,19 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
 
     V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 
-    # use ecgsim ischemia data 
-    # geom_data_ecgsim = h5py.File('3d/data/geom_ecgsim.mat', 'r')
-    # v_pts_ecgsim = np.array(geom_data_ecgsim['geom_ventricle']['pts'])
-    # file_ecgsim = h5py.File('3d/data/surface_ischemia.mat', 'r')
-    # v_data_ecgsim = np.array(file_ecgsim['v'])[0]
-    # v_fem_one = scipy.interpolate.griddata(v_pts_ecgsim, v_data_ecgsim, V.tabulate_dof_coordinates(), method='linear', fill_value=0)
+    if surface_flag:
+    # use ecgsim ischemia data
+        geom_data_ecgsim = h5py.File('3d/data/geom_ecgsim.mat', 'r')
+        v_pts_ecgsim = np.array(geom_data_ecgsim['geom_ventricle']['pts'])
+        file_ecgsim = h5py.File('3d/data/surface_ischemia.mat', 'r')
+        v_data_ecgsim = np.array(file_ecgsim['v'])[0]
+        v_fem_one = scipy.interpolate.griddata(v_pts_ecgsim, v_data_ecgsim, V.tabulate_dof_coordinates(), method='linear', fill_value=0)
 
     # assume node 17 is the center of ischemia 
     # radius = 30
     # node 17 coordinates: (89.1, 40.9, -13.3)
     class ischemia_condition():
-        def __init__(self, u_ischemia, u_healthy, center = center_ischemia, r = radius_ischemia):
+        def __init__(self, u_ischemia, u_healthy, center=center_ischemia, r=radius_ischemia):
             self.u_ischemia = u_ischemia
             self.u_healthy = u_healthy
             self.center = center
@@ -92,8 +94,8 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
     # the earliest node: 146
     # node 146 coordinates: (57, 51.2, 15)
     class activation_initial_condition():
-        def __init__(self, u_peak_ischemia, u_rest_ischemia, u_peak_healthy = 1, u_rest_healthy = 0, 
-                    center_a = center_activation, r_a = radius_activation, center_i = center_ischemia, r_i = radius_ischemia):
+        def __init__(self, u_peak_ischemia, u_rest_ischemia, u_peak_healthy=1, u_rest_healthy=0, 
+                    center_a=center_activation, r_a=radius_activation, center_i=center_ischemia, r_i=radius_ischemia):
             self.u_peak_ischemia = u_peak_ischemia
             self.u_peak_healthy = u_peak_healthy
             self.u_rest_ischemia = u_rest_ischemia
@@ -102,8 +104,9 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
             self.r_a = r_a
             self.center_i = center_i
             self.r_i = r_i
-            # self.center_i = np.array([0, 0, 0])
-            # self.r_i = 0.1
+            if surface_flag:
+                self.center_i = np.array([0, 0, 0])
+                self.r_i = 0.1
         def __call__(self, x):
             if gdim == 3:
                 condition1 = (x[0]-self.center_a[0])**2 + (x[1]-self.center_a[1])**2 + (x[2]-self.center_a[2])**2 < self.r_a**2
@@ -114,36 +117,36 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
             
             if ischemia_flag:
                 return np.where(condition1 & condition2, self.u_peak_ischemia,
-                                np.where( ~condition1 & condition2, self.u_rest_ischemia,
-                                            np.where( ~condition1 & ~condition2, self.u_rest_healthy, self.u_peak_healthy)))
+                                np.where(~condition1 & condition2, self.u_rest_ischemia, 
+                                         np.where( ~condition1 & ~condition2, self.u_rest_healthy, self.u_peak_healthy)))
             else:
                 return np.where(condition1, self.u_peak_healthy, self.u_rest_healthy)
 
+    u_peak = Function(V)
+    u_rest = Function(V)
+    u_n = Function(V)
+    v_n = Function(V)
+    uh = Function(V)
     if ischemia_flag:
-        u_peak = Function(V)
-        # u_peak.x.array[:] = np.where(v_fem_one > 0.5, u_peak_ischemia_val, 1)
         u_peak.interpolate(ischemia_condition(u_peak_ischemia_val, 1))
-        u_rest = Function(V)
-        # u_rest.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val, 0)
         u_rest.interpolate(ischemia_condition(u_rest_ischemia_val, 0))
     else:
         u_peak = 1
         u_rest = 0
     
-    # u_activation = Function(V)
-    # u_activation.interpolate(activation_initial_condition(u_peak_ischemia_val, u_rest_ischemia_val))
-    u_n = Function(V)
-    # u_n.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val,
-    #                           np.where(u_activation.x.array > 0.5, 1, 0))
     u_n.interpolate(activation_initial_condition(u_peak_ischemia_val, u_rest_ischemia_val))
-
-    v_n = Function(V)
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
-
-    uh = Function(V)
-    # u_n.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val,
-    #                           np.where(u_activation.x.array > 0.5, 1, 0))
     uh.interpolate(activation_initial_condition(u_peak_ischemia_val, u_rest_ischemia_val))
+
+    if surface_flag:
+        u_peak.x.array[:] = np.where(v_fem_one > 0.5, u_peak_ischemia_val, 1)
+        u_rest.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val, 0)
+        u_activation = Function(V)
+        u_activation.interpolate(activation_initial_condition(u_peak_ischemia_val, u_rest_ischemia_val))
+        u_n.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val, 
+                                  np.where(u_activation.x.array > 0.5, 1, 0))
+        uh.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val, 
+                                 np.where(u_activation.x.array > 0.5, 1, 0))
 
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)

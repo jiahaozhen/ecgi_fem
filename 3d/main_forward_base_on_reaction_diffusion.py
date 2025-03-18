@@ -17,22 +17,22 @@ if gdim == 2:
     T = 40
 else:
     mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
-    create_mesh(mesh_file, lc = 40)
+    create_mesh(mesh_file, lc=40)
     center_activation = np.array([57, 51.2, 15])
     radius_activation = 5
     center_ischemia = np.array([89.1, 40.9, -13.3])
     radius_ischemia = 30
     T = 40
 v_data = compute_v_based_on_reaction_diffusion(
-    mesh_file = mesh_file, T = T, submesh_flag = True, ischemia_flag = True,
-    gdim = gdim, center_activation = center_activation, radius_activation = radius_activation,
-    center_ischemia = center_ischemia, radius_ischemia = radius_ischemia, 
-    data_argument=True
+    mesh_file=mesh_file, T=T, submesh_flag=True, ischemia_flag=True,
+    gdim=gdim, center_activation=center_activation, radius_activation=radius_activation,
+    center_ischemia=center_ischemia, radius_ischemia=radius_ischemia, 
+    data_argument=False, surface_flag=True
 )
 
 # sample data
 # v_data = v_data[::5]
-u_data = forward_tmp(mesh_file, v_data, gdim = gdim)
+u_data = forward_tmp(mesh_file, v_data, gdim=gdim)
 u_data += np.random.normal(0, 0.1, u_data.shape)
 
 if gdim == 2:

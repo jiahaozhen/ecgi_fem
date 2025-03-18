@@ -28,7 +28,7 @@ else:
     v_exact = np.load('3d/data/v_data_reaction_diffusion.npy')
 
 # mesh of Body
-domain, cell_markers, facet_markers = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
+domain, cell_markers, facet_markers = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
 tdim = domain.topology.dim
 # mesh of Heart
 subdomain_ventricle, ventricle_to_torso, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
@@ -45,7 +45,7 @@ cc = np.array(cc_v)
 print('cc of v_data and v_result:', np.mean(cc))
 
 cc_phi_1 = []
-for i in range(phi_1_exact.shape[0]):
+for i in range(phi_1_result.shape[0]):
     cc_phi_1.append(np.corrcoef(phi_1_exact[i], phi_1_result[i])[0, 1])
 cc = np.array(cc_phi_1)
 
