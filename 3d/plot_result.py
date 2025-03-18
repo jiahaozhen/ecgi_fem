@@ -42,6 +42,7 @@ for i in range(v_exact.shape[0]):
     # cc of v_exact and v_result
     cc_v.append(np.corrcoef(v_exact[i], v_result[i])[0, 1])
 cc = np.array(cc_v)
+print('cc of v_data and v_result:', np.mean(cc))
 
 cc_phi_1 = []
 for i in range(phi_1_exact.shape[0]):

@@ -318,5 +318,14 @@ def get_activation_time_from_v(v_data):
     activation_time = np.argmax(v_deriviative, axis=0)
     return activation_time
 
-def build_laplacian_matrix_on_mesh(mesh):
-    pass
+def v_data_argument(v_data, tau = 1, v_rest_healthy = -90, v_ischemia_rest = -60, v_peak_healthy = 10, v_peak_ischemia = -20):
+    phi_1, phi_2 = compute_phi_with_v_timebased(v_data, None, v_ischemia_rest, v_peak_ischemia)
+    v = []
+    for t in range(phi_2.shape[0]):
+        G_phi_1 = G_tau(phi_1[t], tau)
+        G_phi_2 = G_tau(phi_2[t], tau)
+        v_timeframe = (v_rest_healthy * G_phi_2 + v_peak_healthy * (1 - G_phi_2)) * G_phi_1 + \
+                        (v_ischemia_rest * G_phi_2 + v_peak_ischemia * (1 - G_phi_2)) * (1 - G_phi_1)
+        v.append(v_timeframe)
+    v = np.array(v)
+    return v

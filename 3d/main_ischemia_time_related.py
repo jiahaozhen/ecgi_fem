@@ -101,10 +101,10 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
     # vector b_u
     dx2 = Measure("dx",domain=subdomain_ventricle)
     b_u_element = -dot(grad(v1), dot(Mi, grad(v))) * dx2
-    # b_u_element = -(a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
-    #         - (a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2 \
-    #         - (a3 - a4) * delta_phi_1 * dot(grad(u1), dot(Mi, grad(phi_1))) * dx2 \
-    #         - (a2 - a4) * delta_phi_2 * dot(grad(u1), dot(Mi, grad(phi_2))) * dx2
+    # b_u_element = -(a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(v1), dot(Mi, grad(phi_1))) * dx2 \
+    #         - (a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(v1), dot(Mi, grad(phi_2))) * dx2 \
+    #         - (a3 - a4) * delta_phi_1 * dot(grad(v1), dot(Mi, grad(phi_1))) * dx2 \
+    #         - (a2 - a4) * delta_phi_2 * dot(grad(v1), dot(Mi, grad(phi_2))) * dx2
     entity_map = {domain._cpp_object: ventricle_to_torso}
     linear_form_b_u = form(b_u_element, entity_maps=entity_map)
     b_u = create_vector(linear_form_b_u)
@@ -187,6 +187,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
 
         d.x.array[:] = d_data[timeframe]
 
+        # phi_1_est = np.where(phi_1_init < 0, -tau/2, tau/2)
         if timeframe == 0:
             phi_1_est.x.array[:] = phi_1.x.array
             phi_2_est.x.array[:] = phi_2.x.array
@@ -369,6 +370,8 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
     p4.join()
     p5.join()
 
+    return phi_1_result, phi_2_result, v_result
+
 if __name__ == '__main__':
     gdim = 3
     if gdim == 2:
@@ -381,4 +384,5 @@ if __name__ == '__main__':
         d_data_file = '3d/data/u_data_reaction_diffusion.npy'
     v_exact = np.load(v_exact_data_file)
     d_data = np.load(d_data_file)
-    phi_1, phi_2, v_result = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_exact=v_exact, gdim=3, tau=1, alpha1=1e1, alpha2=1e1, alpha3=1e0)
+    phi_1, phi_2, v_result = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_exact=v_exact, gdim=3, 
+                                                tau=1, alpha1=1e1, alpha2=1e1, alpha3=5e0, plot_flag=True)

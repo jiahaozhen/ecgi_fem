@@ -10,7 +10,7 @@ import numpy as np
 from main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
 
 sys.path.append('.')
-from utils.helper_function import eval_function
+from utils.helper_function import eval_function, v_data_argument
 
 submesh_flag = True
 ischemia_flag = True
@@ -41,7 +41,7 @@ else:
     center_activation = np.array([57, 51.2, 15])
     radius_activation = 5
     center_ischemia = np.array([89.1, 40.9, -13.3])
-    radius_ischemia = 20
+    radius_ischemia = 30
 
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
@@ -50,12 +50,16 @@ u_data = compute_v_based_on_reaction_diffusion(
     gdim = gdim, center_activation = center_activation, radius_activation = radius_activation,
     center_ischemia = center_ischemia, radius_ischemia = radius_ischemia
 )
+u_max = 10
+u_min = -90
+u_data = u_data * (u_max - u_min) + u_min
+u_data = v_data_argument(u_data)
 
 plotter = pyvista.Plotter()
 grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
 u.x.array[:] = u_data[0]
 grid["u"] = eval_function(u, subdomain_ventricle.geometry.x)
-plotter.add_mesh(grid, scalars="u", cmap="viridis", clim=[0, 1])
+plotter.add_mesh(grid, scalars="u", cmap="viridis", clim=[-90, 10])
 plotter.view_isometric()
 plotter.add_text('',name="time_text", font_size=18, color="red")
 if gdim == 2:

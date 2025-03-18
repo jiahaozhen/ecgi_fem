@@ -6,7 +6,7 @@ from dolfinx.fem import functionspace, form, Constant, Function, assemble_scalar
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
 from dolfinx.mesh import create_submesh
 from dolfinx.plot import vtk_mesh
-from ufl import TestFunction, TrialFunction, dot, grad, Measure
+from ufl import TestFunction, TrialFunction, dot, grad, Measure, derivative, sqrt, inner
 from mpi4py import MPI
 from petsc4py import PETSc
 import numpy as np
@@ -66,6 +66,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
             M.interpolate(rho1, cell_markers.find(4))
     Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
 
+    alpha1 = 1e-1
     # phi delta_phi delta_deri_phi
     phi = Function(V2)
     delta_phi = Function(V2)
@@ -107,7 +108,9 @@ def resting_ischemia_inversion(mesh_file, d_data,
 
     # scalar loss
     loss_element = 0.5 * (u - d) ** 2 * ds
+    reg_element = alpha1 * delta_phi * sqrt(inner(grad(phi), grad(phi)) + 1e-8) * dx2
     form_loss = form(loss_element)
+    form_reg = form(reg_element)
 
     # vector b_w
     b_w_element = u1 * (u - d) * ds
@@ -118,8 +121,11 @@ def resting_ischemia_inversion(mesh_file, d_data,
     u2 = TestFunction(V2)
     j_p = (ischemia_potential - normal_potential) * delta_deri_phi * u2 * dot(grad(w), dot(Mi, grad(phi))) * dx2 \
             + (ischemia_potential - normal_potential) * delta_phi * dot(grad(w), dot(Mi, grad(u2))) * dx2
+    reg_p = alpha1 * derivative(delta_phi * sqrt(inner(grad(phi), grad(phi)) + 1e-8) * dx2, phi, u2)
     form_J_p = form(j_p, entity_maps=entity_map)
+    form_Reg_p = form(reg_p, entity_maps=entity_map)
     J_p = create_vector(form_J_p)
+    Reg_p = create_vector(form_Reg_p)
 
     # initial phi
     phi_0 = np.full(phi.x.array.shape, tau/2)
@@ -129,7 +135,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
     # exact solution
     if exact_flag == True:
         v_exact = Function(V2)
-        v_exact.x.array[:] = np.load(v_exact_file)
+        v_exact.x.array[:] = np.load(v_exact_file)[0]
 
     # get u from p
     with b_u.localForm() as loc_b:
@@ -148,7 +154,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
         delta_deri_phi.x.array[:] = delta_deri_tau(phi.x.array, tau)
 
         # cost function
-        loss = assemble_scalar(form_loss)
+        loss = assemble_scalar(form_loss) + assemble_scalar(form_reg)
         loss_per_iter.append(loss)
         if exact_flag == True:
             cm_cmp_per_iter.append(compute_error(v_exact, phi)[0])
@@ -162,9 +168,13 @@ def resting_ischemia_inversion(mesh_file, d_data,
         with J_p.localForm() as loc_J:
             loc_J.set(0)
         assemble_vector(J_p, form_J_p)
-        
+        with Reg_p.localForm() as loc_R:
+                loc_R.set(0)
+        assemble_vector(Reg_p, form_Reg_p)
+        J_p = J_p + Reg_p
         # print('iteration:', k)
-        # print('loss:', loss)
+        # print('loss_residual:', assemble_scalar(form_loss))
+        # print('loss_reg:', assemble_scalar(form_reg))
         # print(k, 'J_p', np.linalg.norm(J_p.array))
         if exact_flag == True:
             print('center of mass error:', compute_error(v_exact, phi)[0])
@@ -196,7 +206,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
             u.x.array[:] = u.x.array + adjustment
 
             # compute loss
-            loss_new = assemble_scalar(form_loss)
+            loss_new = assemble_scalar(form_loss) + assemble_scalar(form_reg)
             loss_cmp = loss_new - (loss + c * alpha * J_p.array.dot(dir_p))
             alpha = gamma * alpha
             step_search = step_search + 1
@@ -248,4 +258,4 @@ if __name__ == '__main__':
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
     # d = np.load('3d/data/d.npy')
     d = np.load('3d/data/u_data_reaction_diffusion.npy')[0]
-    resting_ischemia_inversion(mesh_file, d, plot_flag=True, exact_flag=False)
+    resting_ischemia_inversion(mesh_file, d, v_exact_file='3d/data/v_data_reaction_diffusion.npy', plot_flag=True, exact_flag=True)

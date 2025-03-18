@@ -41,6 +41,10 @@ for alpha1 in [1e1, 1e0]:
                                 a3=v_max, a4=(v_max - v_min) * v_peak_i_0_1 + v_min,
                                 alpha1=alpha1, alpha2=alpha2, alpha3=alpha3
                                 )
-            print*('alpha1:', alpha1, 'alpha2:', alpha2, 'alpha3:', alpha3)
-            print('cc of v_data and v_result:', np.mean(compute_cc(v_data, v_result)))
-            
+            print('alpha1:', alpha1, 'alpha2:', alpha2, 'alpha3:', alpha3)
+            cc_v = []
+            for i in range(v_data.shape[0]):
+                # cc of v_exact and v_result
+                cc_v.append(np.corrcoef(v_data[i], v_result[i])[0, 1])
+            cc = np.array(cc_v)
+            print('cc of v_data and v_result:', np.mean(cc))
