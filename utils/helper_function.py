@@ -144,7 +144,7 @@ def compute_phi_with_v_timebased(v, function_space, v_rest_ischemia, v_peak_isch
         min_act = min_distance(coordinates, marker_activation[timeframe])
         min_no_act = min_distance(coordinates, ~marker_activation[timeframe])
     
-        phi_1[timeframe] = np.where(marker_ischemia[timeframe], -min_no_iso, min_iso)
+        phi_1[timeframe] = np.where(marker_ischemia, -min_no_iso, min_iso)
         phi_2[timeframe] = np.where(marker_activation[timeframe], -min_no_act, min_act)
         if (phi_2[timeframe] == 0).all():
             phi_2[timeframe] = -10
@@ -319,7 +319,7 @@ def get_activation_time_from_v(v_data):
     activation_time = np.argmax(v_deriviative, axis=0)
     return activation_time
 
-def v_data_argument(v_data, function_space = None, tau = 5, v_rest_healthy = -90, v_ischemia_rest = -60, v_peak_healthy = 10, v_peak_ischemia = -20):
+def v_data_argument(v_data, function_space = None, tau = 1, v_rest_healthy = -90, v_ischemia_rest = -60, v_peak_healthy = 10, v_peak_ischemia = -20):
     phi_1, phi_2 = compute_phi_with_v_timebased(v_data, function_space, v_ischemia_rest, v_peak_ischemia)
     v = []
     for t in range(phi_2.shape[0]):

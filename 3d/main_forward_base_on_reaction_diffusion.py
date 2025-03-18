@@ -27,7 +27,7 @@ v_data = compute_v_based_on_reaction_diffusion(
     mesh_file = mesh_file, T = T, submesh_flag = True, ischemia_flag = True,
     gdim = gdim, center_activation = center_activation, radius_activation = radius_activation,
     center_ischemia = center_ischemia, radius_ischemia = radius_ischemia, 
-    data_argument=False
+    data_argument=True
 )
 
 # sample data

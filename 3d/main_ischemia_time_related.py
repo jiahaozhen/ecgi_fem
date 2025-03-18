@@ -22,7 +22,7 @@ from utils.helper_function import G_tau, delta_tau, delta_deri_tau, compute_erro
 def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
                        a1=-90, a2=-60, a3=10, a4=-20, 
                        tau=1, alpha1=5e1, alpha2=1e1, alpha3=1e0,
-                       plot_flag=False):
+                       plot_flag=False, print_message=False):
 
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim = gdim)
@@ -302,18 +302,20 @@ def ischemia_inversion(mesh_file, d_data, v_exact, gdim=3, sigma_i=0.4, sigma_e=
         end_time = time.time()
         cc = np.corrcoef(v_exact[timeframe], v_result[timeframe])[0, 1]
         cc_per_timeframe.append(cc)
-        print('timeframe:', timeframe)
-        print('end at', k, 'iteration')
-        print('J_p:', np.linalg.norm(J_p.array))
-        print('J_q:', np.linalg.norm(J_q.array))
-        print('loss:', loss)
-        print('error in center of mass (ischemia):', cm1)
-        print('error in center of mass (activation):', cm2)
-        print('correlation coefficient:', cc)
-        print(f"cost {end_time - start_time} seconds")
-        # plt.plot(loss_in_timeframe)
-        # plt.title('loss in each iteration at timeframe ' + str(timeframe))
-        # plt.show()
+        if print_message == True:
+            print('timeframe:', timeframe)
+            print('end at', k, 'iteration')
+            print('J_p:', np.linalg.norm(J_p.array))
+            print('J_q:', np.linalg.norm(J_q.array))
+            print('loss_residual:', assemble_scalar(form_loss))
+            print('loss_reg:', assemble_scalar(form_reg))
+            print('error in center of mass (ischemia):', cm1)
+            print('error in center of mass (activation):', cm2)
+            print('correlation coefficient:', cc)
+            print(f"cost {end_time - start_time} seconds")
+            # plt.plot(loss_in_timeframe)
+            # plt.title('loss in each iteration at timeframe ' + str(timeframe))
+            # plt.show()
 
     if gdim == 2:
         np.save('2d/data/phi_1_result.npy', phi_1_result)
@@ -385,4 +387,5 @@ if __name__ == '__main__':
     v_exact = np.load(v_exact_data_file)
     d_data = np.load(d_data_file)
     phi_1, phi_2, v_result = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_exact=v_exact, gdim=3, 
-                                                tau=1, alpha1=1e1, alpha2=1e1, alpha3=5e0, plot_flag=True)
+                                                tau=1, alpha1=1e0, alpha2=1e0, alpha3=1e1, 
+                                                plot_flag=True, print_message=True)

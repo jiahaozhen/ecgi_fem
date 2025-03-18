@@ -21,7 +21,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
                                      gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
                                      ischemia_potential=-60, normal_potential=-90, 
                                      tau=1, v_exact_file='3d/data/v.npy',
-                                     multi_flag=True, plot_flag=False, exact_flag=False):
+                                     multi_flag=True, plot_flag=False, exact_flag=False, print_message=False):
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
@@ -172,12 +172,13 @@ def resting_ischemia_inversion(mesh_file, d_data,
                 loc_R.set(0)
         assemble_vector(Reg_p, form_Reg_p)
         J_p = J_p + Reg_p
-        print('iteration:', k)
-        print('loss_residual:', assemble_scalar(form_loss))
-        print('loss_reg:', assemble_scalar(form_reg))
-        print(k, 'J_p', np.linalg.norm(J_p.array))
-        if exact_flag == True:
-            print('center of mass error:', compute_error(v_exact, phi)[0])
+        if print_message == True:
+            print('iteration:', k)
+            print('loss_residual:', assemble_scalar(form_loss))
+            print('loss_reg:', assemble_scalar(form_reg))
+            print(k, 'J_p', np.linalg.norm(J_p.array))
+            if exact_flag == True:
+                print('center of mass error:', compute_error(v_exact, phi)[0])
         # check if the condition is satisfied
         if (k > 1e2 or np.linalg.norm(J_p.array) < 1e-1):
             break
@@ -191,7 +192,6 @@ def resting_ischemia_inversion(mesh_file, d_data,
         gamma = 0.5
         c = 0.1
         step_search = 0
-        # print("start line search")
         while(True):
             # adjust p
             phi.x.array[:] = phi_v + alpha * dir_p
@@ -212,7 +212,6 @@ def resting_ischemia_inversion(mesh_file, d_data,
             step_search = step_search + 1
             if (step_search > 20 or loss_cmp < 0):
                 break
-        # print("end line search")
 
     if plot_flag == False:
         return phi.x.array
@@ -259,4 +258,4 @@ if __name__ == '__main__':
     # d = np.load('3d/data/d.npy')
     d = np.load('3d/data/u_data_reaction_diffusion.npy')[0]
     v_exact_file = '3d/data/v_data_reaction_diffusion.npy'
-    resting_ischemia_inversion(mesh_file, d, plot_flag=True, exact_flag=True, v_exact_file=v_exact_file)
+    resting_ischemia_inversion(mesh_file, d, plot_flag=True, exact_flag=True, v_exact_file=v_exact_file, print_message=True)
