@@ -19,7 +19,9 @@ import multiprocessing
 sys.path.append('.')
 from utils.helper_function import G_tau, delta_tau, delta_deri_tau, compute_error_with_v, eval_function
 
-def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,  
+def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, alpha4,
+                       phi_1_exact = np.load('3d/data/phi_1_exact_reaction_diffusion.npy'), 
+                       phi_2_exact = np.load('3d/data/phi_2_exact_reaction_diffusion.npy'), 
                        gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
                        a1=-90, a2=-60, a3=10, a4=-20,
                        plot_flag=False, print_message=False):
@@ -118,12 +120,12 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,
 
     # scalar loss
     loss_element = 0.5 * (u - d) ** 2 * ds
-    reg_element_1 = 0.5 * alpha1 * (phi_1 - phi_1_est) ** 2 * dx2 + 0.5 * alpha2 * phi_2_mono ** 2 * dx2
-    reg_element_2 = alpha3 * delta_phi_1 * sqrt(inner(grad(phi_1), grad(phi_1)) + 1e-8) * dx2 + \
-                    alpha3 * delta_phi_2 * sqrt(inner(grad(phi_2), grad(phi_2)) + 1e-8) * dx2
+    reg_element_1 = 0.5 * alpha1 * (phi_1 - phi_1_est) ** 2 * dx2
+    reg_ekement_2 = 0.5 * alpha2 * phi_2_mono ** 2 * dx2
+    reg_element_3 = alpha3 * delta_phi_1 * sqrt(inner(grad(phi_1), grad(phi_1)) + 1e-8) * dx2
+    reg_element_4 = alpha4 * delta_phi_2 * sqrt(inner(grad(phi_2), grad(phi_2)) + 1e-8) * dx2
 
     form_loss = form(loss_element)
-    form_reg = form(reg_element_1 + reg_element_2)
 
     # vector b_w
     b_w_element = u1 * (u - d) * ds
@@ -150,53 +152,51 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,
                   - (a2 - a4) * delta_deri_phi_2 * (1 - G_phi_1) * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 
                   - (a2 - a4) * delta_phi_2 * (1 - G_phi_1) * dot(grad(w), dot(Mi, grad(u2))) * dx2)
     reg_q_1 = alpha2 * phi_2_mono * phi_2_I * u2 * dx2
-    reg_q_2 = derivative(alpha3 * delta_phi_2 * sqrt(inner(grad(phi_2), grad(phi_2)) + 1e-8) * dx2, phi_2, u2)
+    reg_q_2 = derivative(alpha4 * delta_phi_2 * sqrt(inner(grad(phi_2), grad(phi_2)) + 1e-8) * dx2, phi_2, u2)
     form_Residual_q = form(residual_q, entity_maps=entity_map)
     form_Reg_q = form(reg_q_1 + reg_q_2, entity_maps=entity_map)
     J_q = create_vector(form_Residual_q)
     Reg_q = create_vector(form_Reg_q)
 
     # initial phi_1
+    print('start copmuting phi_1')
     phi_1_init = resting_ischemia_inversion(mesh_file, d_data=d_data[0], gdim=gdim,
                                             ischemia_potential=a2, normal_potential=a1, tau=tau)
     #initial phi_2
-    phi_1.x.array[:] = np.where(phi_1_init < 0, -tau/2, tau/2)
-    phi_2.x.array[:] = np.full(phi_1.x.array.shape, tau/2)
+    phi_1.x.array[:] = phi_1_init
+    # phi_2.x.array[:] = np.full(phi_2.x.array.shape, tau/2)
+    phi_2.x.array[:] = np.where(phi_2_exact[0] < 0, -tau/2, tau/2)
 
     # phi result
     phi_1_result = np.zeros((time_total, sub_node_num))
     phi_2_result = np.zeros((time_total, sub_node_num))
-    v_result = np.zeros((time_total, sub_node_num))
+    v_result_1 = np.zeros((time_total, sub_node_num))
+    v_result_2 = np.zeros((time_total, sub_node_num))
 
     cm_phi_1_per_timeframe = []
     cm_phi_2_per_timeframe = []
-    loss_per_timeframe = []
-    cc_per_timeframe = []
+    loss_1_per_timeframe = []
+    loss_2_per_timeframe = []
+    cc_1_per_timeframe = []
+    cc_2_per_timeframe = []
 
+    # fix phi_1 for phi_2
+    print('start computing phi_2 with phi_1 fixed')
+    form_reg = form(reg_ekement_2 + reg_element_4, entity_maps=entity_map)
+    G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+    delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
+    delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
     for timeframe in range(time_total):
 
         start_time = time.time()
 
-        # if timeframe % 10 == 0:
-        #     # phi_1.x.array[:] = phi_1_exact[timeframe]
-        #     phi_1.x.array[:] = phi_0
-        #     if timeframe < 200:
-        #         phi_2.x.array[:] =  phi_0
-        #     else:
-        #         phi_2.x.array[:] = -phi_0
-
         d.x.array[:] = d_data[timeframe]
-
-        # phi_1_est = np.where(phi_1_init < 0, -tau/2, tau/2)
         if timeframe == 0:
-            phi_1_est.x.array[:] = phi_1.x.array
             phi_2_est.x.array[:] = phi_2.x.array
         else:
-            phi_1_est.x.array[:] = phi_1_result[timeframe-1]
             phi_2_est.x.array[:] = phi_2_result[timeframe-1]
 
         # prepare to compute u from phi_1 phi_2
-        G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
         G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
         v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + 
                         (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
@@ -213,10 +213,8 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,
         k = 0
         loss_in_timeframe = []
         while (True):
-            # prepare to compute partial derivative of p, q
-            delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
+            # prepare to compute partial derivative of q
             delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
-            delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
             delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
             phi_2_mono.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0, 
                                              phi_2.x.array - phi_2_est.x.array, 0)
@@ -230,14 +228,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,
                 loc_w.set(0)
             assemble_vector(b_w, linear_form_b_w)
             solver.solve(b_w, w.vector)
-            # compute partial derivative of p, q from w
-            with J_p.localForm() as loc_jp:
-                loc_jp.set(0)
-            assemble_vector(J_p, form_Residual_p)
-            with Reg_p.localForm() as loc_rp:
-                loc_rp.set(0)
-            assemble_vector(Reg_p, form_Reg_p)
-            J_p.axpy(1.0, Reg_p)
+            # compute partial derivative of q from w
             with J_q.localForm() as loc_jq:
                 loc_jq.set(0)
             assemble_vector(J_q, form_Residual_q)
@@ -247,31 +238,21 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,
             J_q.axpy(1.0, Reg_q)
         
             # check if the condition is satisfied
-            if (k > 1e2 or np.linalg.norm(J_p.array) < 1e-1 and np.linalg.norm(J_q.array) < 1e-1):
+            if (k > 1e2 or np.linalg.norm(J_q.array) < 1e-1):
                 break
             k = k + 1
 
             # line search
-            phi_1_v = phi_1.x.array[:].copy()
             phi_2_v = phi_2.x.array[:].copy()
-            dir_p = -J_p.array.copy()
             dir_q = -J_q.array.copy()
-            # sub_domain_boundary = locate_entities_boundary(subdomain_ventricle, tdim-3, 
-            #                                                lambda x: np.full(x.shape[1], True, dtype=bool))
-            # functionspace2mesh = fspace2mesh(V2)
-            # mesh2functionspace = np.argsort(functionspace2mesh)
-            # J_p_array[mesh2functionspace[sub_domain_boundary]] = J_p_array[mesh2functionspace[sub_domain_boundary]]
-            # J_q_array[mesh2functionspace[sub_domain_boundary]] = J_q_array[mesh2functionspace[sub_domain_boundary]]
             alpha = 1
             gamma = 0.6
             c = 0.1
             step_search = 0
             while(True):
-                # adjust p q
-                phi_1.x.array[:] = phi_1_v + alpha * dir_p
+                # adjust q
                 phi_2.x.array[:] = phi_2_v + alpha * dir_q
-                # get u from p, q
-                G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+                # get u from q
                 G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
                 v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + 
                                 (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
@@ -285,57 +266,173 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,
 
                 # compute loss
                 loss_new = assemble_scalar(form_loss) + assemble_scalar(form_reg)
-                loss_cmp = loss_new - (loss + c * alpha * np.concatenate((J_p.array, J_q.array))
-                                       .dot(np.concatenate((dir_p, dir_q))))
+                loss_cmp = loss_new - (loss + c * alpha * J_q.array.dot(dir_q))
                 alpha = gamma * alpha
                 step_search = step_search + 1
                 if (step_search > 20 or loss_cmp < 0):
                     break
 
-        loss_per_timeframe.append(loss)
-        phi_1_result[timeframe] = phi_1.x.array.copy()
+        loss_1_per_timeframe.append(loss)
         phi_2_result[timeframe] = phi_2.x.array.copy()
-        v_result[timeframe] = v.x.array.copy()
-        cm1, cm2 = compute_error_with_v(v_exact[timeframe], v_result[timeframe], V2, -90, -60, 10, -20)
-        cm_phi_1_per_timeframe.append(cm1)
+        v_result_1[timeframe] = v.x.array.copy()
+        _, cm2 = compute_error_with_v(v_exact[timeframe], v_result_1[timeframe], V2, -90, -60, 10, -20)
         cm_phi_2_per_timeframe.append(cm2)
         end_time = time.time()
-        cc = np.corrcoef(v_exact[timeframe], v_result[timeframe])[0, 1]
-        cc_per_timeframe.append(cc)
+        cc = np.corrcoef(v_exact[timeframe], v_result_1[timeframe])[0, 1]
+        cc_1_per_timeframe.append(cc)
+        if print_message == True:
+            print('timeframe:', timeframe)
+            print('end at', k, 'iteration')
+            print('J_q:', np.linalg.norm(J_q.array))
+            print('loss_residual:', assemble_scalar(form_loss))
+            print('loss_reg:', assemble_scalar(form_reg))
+            print('error in center of mass (activation):', cm2)
+            print('correlation coefficient:', cc)
+            print(f"cost {end_time - start_time} seconds")
+
+    # fix phi_2 for phi_1
+    print('start adjust phi_1 with phi_2 fixed')
+    form_reg = form(reg_element_1 + reg_element_3, entity_maps=entity_map)
+    for timeframe in range(time_total):
+
+        start_time = time.time()
+
+        d.x.array[:] = d_data[timeframe]
+        phi_2.x.array[:] = phi_2_result[timeframe]
+        G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
+        delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+        delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
+        if timeframe == 0:
+            phi_2_est.x.array[:] = phi_2_result[timeframe]
+        else:
+            phi_2_est.x.array[:] = phi_2_result[timeframe-1]
+        phi_2_mono.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0,
+                                         phi_2.x.array - phi_2_est.x.array, 0)
+        phi_2_I.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0, 1, 0)
+
+        if timeframe == 0:
+            phi_1_est.x.array[:] = phi_1.x.array
+        else:
+            phi_1_est.x.array[:] = phi_1_result[timeframe-1]
+
+        # prepare to compute u from phi_1 phi_2
+        G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+        v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +
+                        (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
+
+        # get u from v
+        with b_u.localForm() as loc_b:
+            loc_b.set(0)
+        assemble_vector(b_u, linear_form_b_u)
+        solver.solve(b_u, u.vector)
+        # adjust u
+        adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+        u.x.array[:] = u.x.array + adjustment
+
+        k = 0
+        loss_in_timeframe = []
+        while (True):
+            # prepare to compute partial derivative of q
+            delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
+            delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
+
+            # cost function
+            loss = assemble_scalar(form_loss) + assemble_scalar(form_reg)
+            loss_in_timeframe.append(loss)
+            # get w from u
+            with b_w.localForm() as loc_w:
+                loc_w.set(0)
+            assemble_vector(b_w, linear_form_b_w)
+            solver.solve(b_w, w.vector)
+            # compute partial derivative of p from w
+            with J_p.localForm() as loc_jp:
+                loc_jp.set(0)
+            assemble_vector(J_p, form_Residual_p)
+            with Reg_p.localForm() as loc_rp:
+                loc_rp.set(0)
+            assemble_vector(Reg_p, form_Reg_p)
+            J_p.axpy(1.0, Reg_p)
+        
+            # check if the condition is satisfied
+            if (k > 1e2 or np.linalg.norm(J_p.array) < 1e-1):
+                break
+            k = k + 1
+
+            # line search
+            phi_1_v = phi_1.x.array[:].copy()
+            dir_p = -J_p.array.copy()
+            alpha = 1
+            gamma = 0.6
+            c = 0.1
+            step_search = 0
+            while(True):
+                # adjust p
+                phi_1.x.array[:] = phi_1_v + alpha * dir_p
+                # get u from p
+                G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+                v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + 
+                                (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
+                with b_u.localForm() as loc_b:
+                    loc_b.set(0)
+                assemble_vector(b_u, linear_form_b_u)
+                solver.solve(b_u, u.vector)
+                # adjust u
+                adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+                u.x.array[:] = u.x.array + adjustment
+
+                # compute loss
+                loss_new = assemble_scalar(form_loss) + assemble_scalar(form_reg)
+                loss_cmp = loss_new - (loss + c * alpha * J_p.array.dot(dir_p))
+                alpha = gamma * alpha
+                step_search = step_search + 1
+                if (step_search > 20 or loss_cmp < 0):
+                    break
+
+        loss_2_per_timeframe.append(loss)
+        phi_1_result[timeframe] = phi_1.x.array.copy()
+        v_result_2[timeframe] = v.x.array.copy()
+        cm1, _ = compute_error_with_v(v_exact[timeframe], v_result_2[timeframe], V2, -90, -60, 10, -20)
+        cm_phi_1_per_timeframe.append(cm1)
+        end_time = time.time()
+        cc = np.corrcoef(v_exact[timeframe], v_result_2[timeframe])[0, 1]
+        cc_2_per_timeframe.append(cc)
         if print_message == True:
             print('timeframe:', timeframe)
             print('end at', k, 'iteration')
             print('J_p:', np.linalg.norm(J_p.array))
-            print('J_q:', np.linalg.norm(J_q.array))
             print('loss_residual:', assemble_scalar(form_loss))
             print('loss_reg:', assemble_scalar(form_reg))
             print('error in center of mass (ischemia):', cm1)
-            print('error in center of mass (activation):', cm2)
             print('correlation coefficient:', cc)
-            print(f"cost {end_time - start_time} seconds")
-            # plt.plot(loss_in_timeframe)
-            # plt.title('loss in each iteration at timeframe ' + str(timeframe))
-            # plt.show()
+            print(f"cost {end_time - start_time} seconds")    
 
     if gdim == 2:
         np.save('2d/data/phi_1_result.npy', phi_1_result)
         np.save('2d/data/phi_2_result.npy', phi_2_result)
-        np.save('2d/data/v_result.npy', v_result)
+        np.save('2d/data/v_result_2.npy', v_result_1)
     else:
         np.save('3d/data/phi_1_result.npy', phi_1_result)
         np.save('3d/data/phi_2_result.npy', phi_2_result)
-        np.save('3d/data/v_result.npy', v_result)
+        np.save('3d/data/v_result_2.npy', v_result_1)
 
     if plot_flag == False:
-        return phi_1_result, phi_2_result, v_result
+        return phi_1_result, phi_2_result, v_result_2
 
     def plot_loss():
-        plt.subplot(1, 2, 1)
-        plt.plot(np.linspace(0, 40, 201), loss_per_timeframe)
+        plt.subplot(2, 2, 1)
+        plt.plot(np.linspace(0, 40, 201), loss_1_per_timeframe)
         plt.title('cost functional')
         plt.xlabel('time')
-        plt.subplot(1, 2, 2)
-        plt.plot(np.linspace(0, 40, 201), cc_per_timeframe)
+        plt.subplot(2, 2, 2)
+        plt.plot(np.linspace(0, 40, 201), cc_1_per_timeframe)
+        plt.title('correlation coefficient')
+        plt.xlabel('time')
+        plt.subplot(2, 2, 3)
+        plt.plot(np.linspace(0, 40, 201), loss_2_per_timeframe)
+        plt.title('cost functional')
+        plt.xlabel('time')
+        plt.subplot(2, 2, 4)
+        plt.plot(np.linspace(0, 40, 201), cc_2_per_timeframe)
         plt.title('correlation coefficient')
         plt.xlabel('time')
         plt.show()
@@ -358,7 +455,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,
 
     p1 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_1_result < 0, 1, 0), 'ischemia'))
     p2 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_2_result < 0, 1, 0), 'activation'))
-    p3 = multiprocessing.Process(target=plot_with_time, args=(v_result, 'v_result'))
+    p3 = multiprocessing.Process(target=plot_with_time, args=(v_result_2, 'v_result'))
     p4 = multiprocessing.Process(target=plot_with_time, args=(v_exact, 'v_exact'))
     p5 = multiprocessing.Process(target=plot_loss)
     p1.start()
@@ -372,7 +469,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,
     p4.join()
     p5.join()
 
-    return phi_1_result, phi_2_result, v_result
+    return phi_1_result, phi_2_result, v_result_2
 
 if __name__ == '__main__':
     gdim = 3
@@ -387,5 +484,5 @@ if __name__ == '__main__':
     v_exact = np.load(v_exact_data_file)
     d_data = np.load(d_data_file)
     phi_1, phi_2, v_result = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_exact=v_exact, gdim=3, 
-                                                tau=1, alpha1=1e0, alpha2=1e0, alpha3=5e0, 
+                                                tau=1, alpha1=1e0, alpha2=1e1, alpha3=5e0, alpha4=5e0,
                                                 plot_flag=True, print_message=True)

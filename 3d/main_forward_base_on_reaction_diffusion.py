@@ -23,7 +23,7 @@ else:
     center_ischemia = np.array([89.1, 40.9, -13.3])
     radius_ischemia = 30
     T = 40
-v_data = compute_v_based_on_reaction_diffusion(
+v_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(
     mesh_file=mesh_file, T=T, submesh_flag=True, ischemia_flag=True,
     gdim=gdim, center_activation=center_activation, radius_activation=radius_activation,
     center_ischemia=center_ischemia, radius_ischemia=radius_ischemia, 
@@ -33,11 +33,15 @@ v_data = compute_v_based_on_reaction_diffusion(
 # sample data
 # v_data = v_data[::5]
 u_data = forward_tmp(mesh_file, v_data, gdim=gdim)
-u_data += np.random.normal(0, 0.1, u_data.shape)
+# u_data += np.random.normal(0, 1, u_data.shape)
 
 if gdim == 2:
     np.save('2d/data/u_data_reaction_diffusion.npy', u_data)
     np.save('2d/data/v_data_reaction_diffusion.npy', v_data)
+    np.save('2d/data/phi_1_exact_reaction_diffusion.npy', phi_1)
+    np.save('2d/data/phi_2_exact_reaction_diffusion.npy', phi_2)
 else:
     np.save('3d/data/u_data_reaction_diffusion.npy', u_data)
     np.save('3d/data/v_data_reaction_diffusion.npy', v_data)
+    np.save('3d/data/phi_1_exact_reaction_diffusion.npy', phi_1)
+    np.save('3d/data/phi_2_exact_reaction_diffusion.npy', phi_2)

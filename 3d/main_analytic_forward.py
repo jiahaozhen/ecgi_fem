@@ -125,6 +125,7 @@ def main():
     u.x.array[:] = u.x.array + c
 
     print('u relative error:', np.linalg.norm(u.x.array - u_exact.x.array) / np.linalg.norm(u_exact.x.array))
+    print('u cc: ', np.corrcoef(u.x.array, u_exact.x.array)[0, 1])
 
     # plot
     plotter_v = pyvista.Plotter(shape=(1,3))
@@ -164,7 +165,7 @@ def main():
 
     plotter_v.show()
 
-    plotter = pyvista.Plotter(shape=(2, 3))
+    plotter = pyvista.Plotter(shape=(2, 3), off_screen=True)
     plotter.subplot(0, 0)
     grid_ue_exact = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
     ue_exact_boundary = eval_function(u_exact, subdomain.geometry.x)
@@ -230,8 +231,8 @@ def main():
     plotter.view_xz()
     plotter.add_axes()
     plotter.add_title("Torso potential error (ut_error)", font_size=9)
-
-    plotter.show()
+    plotter.window_size = [1920, 1080]
+    plotter.screenshot("3d/main_analytic_forward.png")
 
 if __name__ == '__main__':
     main()

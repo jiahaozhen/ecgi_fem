@@ -150,7 +150,7 @@ def compute_d_from_tmp(mesh_file, v_file='3d/data/v_all.npy', sigma_i=1, sigma_e
 
 if __name__ == '__main__':
     file = "3d/data/mesh_multi_conduct_ecgsim.msh"
-    v_data = np.load('3d/data/v.npy')
-    u_data = forward_tmp(file, v_data, multi_flag=False)
-    # d = compute_d_from_tmp(file, v_file='3d/data/v_all.npy')
-    # sio.savemat('3d/data/surface_potential_fem.mat', {'surface_potential_fem': d})
+    # v_data = np.load('3d/data/v.npy')
+    # u_data = forward_tmp(file, v_data, multi_flag=False)
+    d = compute_d_from_tmp(file, v_file='3d/data/v_all.npy')
+    sio.savemat('3d/data/surface_potential_fem.mat', {'surface_potential_fem': d})

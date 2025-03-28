@@ -13,7 +13,7 @@ import scipy.interpolate
 import numpy as np
 
 sys.path.append('.')
-from utils.helper_function import v_data_argument
+from utils.helper_function import v_data_argument, compute_phi_with_v_timebased
 
 def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_timeframe=5, 
                                           u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3,
@@ -147,6 +147,10 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
                                   np.where(u_activation.x.array > 0.5, 1, 0))
         uh.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val, 
                                  np.where(u_activation.x.array > 0.5, 1, 0))
+    if isinstance(u_peak, Function):
+        ischemia_marker = np.where(u_peak.x.array == u_peak_ischemia_val, 1, 0)
+    else:
+        ischemia_marker = np.full(u_n.x.array.shape, 0)
 
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)
@@ -189,9 +193,11 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
 
     u_data = np.array(u_data)
     u_data = u_data * (v_max - v_min) + v_min
+    phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
     if data_argument:
-        u_data = v_data_argument(u_data, function_space=V)
-    return u_data
+        u_data = v_data_argument(phi_1, phi_2)
+    
+    return u_data, phi_1, phi_2
 
 if __name__ == '__main__':
     submesh_flag = False
@@ -206,7 +212,7 @@ if __name__ == '__main__':
         mesh_file = '3d/data/mesh_ecgsim_ventricle.msh'
         subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
         tdim = subdomain_ventricle.topology.dim
-    v_data = compute_v_based_on_reaction_diffusion(mesh_file, T = 500, submesh_flag=submesh_flag, ischemia_flag=True)
+    v_data, _ = compute_v_based_on_reaction_diffusion(mesh_file, T = 500, submesh_flag=submesh_flag, ischemia_flag=True)
     # find the 2 point nearest to the center of ischemia
     # node 17 coordinates: (89.1, 40.9, -13.3)
     pts = subdomain_ventricle.geometry.x

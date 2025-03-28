@@ -111,25 +111,16 @@ def compute_phi_with_v(v, function_space, v_rest_healthy, v_rest_ischemia, v_pea
 
     return phi_1, phi_2
 
-def compute_phi_with_v_timebased(v, function_space, v_rest_ischemia, v_peak_ischemia):
+def compute_phi_with_v_timebased(v, function_space, marker_ischemia):
     phi_1 = np.full_like(v, 0)
     phi_2 = np.full_like(v, 0)
     activation_time = get_activation_time_from_v(v)
+    marker_ischemia = np.where(marker_ischemia==1, True, False)
 
-    # for i in range(v.shape[1]):
-    #     phi_2[:activation_time[i], i] = 10
-    #     phi_2[activation_time[i]:, i] = -10
-    #     if  (min(v[:, i]) < v_rest_ischemia - 10 or max(v[:, i]) > v_peak_ischemia + 10) :
-    #         phi_1[:, i] = 10
-    #     else:
-    #         phi_1[:, i] = -10
     coordinates = function_space.tabulate_dof_coordinates()
-    marker_ischemia = np.full(v.shape[1], False,  dtype=bool)
     marker_activation  = np.full_like(v, False, dtype=bool)
     for i in range(v.shape[1]):
         marker_activation[activation_time[i]:, i] = True
-        if  (min(v[:, i]) > v_rest_ischemia - 10 and max(v[:, i]) < v_peak_ischemia + 10) :
-            marker_ischemia[i] = True
 
     def min_distance(coords, mask):
         if np.any(mask):
@@ -319,14 +310,26 @@ def get_activation_time_from_v(v_data):
     activation_time = np.argmax(v_deriviative, axis=0)
     return activation_time
 
-def v_data_argument(v_data, function_space = None, tau = 1, v_rest_healthy = -90, v_ischemia_rest = -60, v_peak_healthy = 10, v_peak_ischemia = -20):
-    phi_1, phi_2 = compute_phi_with_v_timebased(v_data, function_space, v_ischemia_rest, v_peak_ischemia)
-    v = []
-    for t in range(phi_2.shape[0]):
-        G_phi_1 = G_tau(phi_1[t], tau)
-        G_phi_2 = G_tau(phi_2[t], tau)
-        v_timeframe = (v_rest_healthy * G_phi_2 + v_peak_healthy * (1 - G_phi_2)) * G_phi_1 + \
-                        (v_ischemia_rest * G_phi_2 + v_peak_ischemia * (1 - G_phi_2)) * (1 - G_phi_1)
-        v.append(v_timeframe)
-    v = np.array(v)
+def v_data_argument(phi_1, phi_2, tau = 1, a1 = -90, a2 = -60, a3 = 10, a4 = -20):
+    # v = []
+    # for t in range(phi_2.shape[0]):
+    #     G_phi_1 = G_tau(phi_1[t], tau)
+    #     G_phi_2 = G_tau(phi_2[t], tau)
+    #     v_timeframe = (a1 * G_phi_2 + a3 * (1 - G_phi_2)) * G_phi_1 + (a2 * G_phi_2 + a4 * (1 - G_phi_2)) * (1 - G_phi_1)
+    #     v.append(v_timeframe)
+    # v = np.array(v)
+    G_phi_1 = G_tau(phi_1, tau)
+    G_phi_2 = G_tau(phi_2, tau)
+    v = (a1 * G_phi_2 + a3 * (1 - G_phi_2)) * G_phi_1 + (a2 * G_phi_2 + a4 * (1 - G_phi_2)) * (1 - G_phi_1)
     return v
+
+def compute_error_phi(phi_exact, phi_result, function_space):
+    marker_exact = np.where(phi_exact < 0, 1, 0)
+    marker_result = np.where(phi_result < 0, 1, 0)
+    coordinates = function_space.tabulate_dof_coordinates()
+    coordinates_ischemia_exact = coordinates[np.where(marker_exact == 1)]
+    coordinates_ischemia_result = coordinates[np.where(marker_result == 1)]
+    cm1 = np.mean(coordinates_ischemia_exact, axis=0)
+    cm2 = np.mean(coordinates_ischemia_result, axis=0)
+    cm = np.linalg.norm(cm1-cm2)
+    return cm
