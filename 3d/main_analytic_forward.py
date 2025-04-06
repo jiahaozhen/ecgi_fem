@@ -165,7 +165,7 @@ def main():
 
     plotter_v.show()
 
-    plotter = pyvista.Plotter(shape=(2, 3), off_screen=True)
+    plotter = pyvista.Plotter(shape=(2, 2), off_screen=True)
     plotter.subplot(0, 0)
     grid_ue_exact = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
     ue_exact_boundary = eval_function(u_exact, subdomain.geometry.x)
@@ -173,7 +173,7 @@ def main():
     ue_exact_boundary[mask] = ue_exact_boundary[subboundary_index[0]]
     grid_ue_exact.point_data["ue_exact"] = ue_exact_boundary
     grid_ue_exact.set_active_scalars("ue_exact")
-    plotter.add_mesh(grid_ue_exact, show_edges=True)
+    plotter.add_mesh(grid_ue_exact, show_edges=True, scalar_bar_args = {"fmt": "%.3f"})
     plotter.view_xz()
     plotter.add_axes()
     plotter.add_title("Heart potential exact (ue_exact)", font_size=9)
@@ -185,7 +185,7 @@ def main():
     ut_exact_boundary[mask] = ut_exact_boundary[boundary_index[0]]
     grid_ut_exact.point_data["ut_exact"] = ut_exact_boundary
     grid_ut_exact.set_active_scalars("ut_exact")
-    plotter.add_mesh(grid_ut_exact, show_edges=True)
+    plotter.add_mesh(grid_ut_exact, show_edges=True, scalar_bar_args = {"fmt": "%.3f"})
     plotter.view_xz()
     plotter.add_axes()
     plotter.add_title("Torso potential exact (ut_exact)", font_size=9)
@@ -197,10 +197,10 @@ def main():
     ue_boundary[mask] = ue_boundary[subboundary_index[0]]
     grid_ue.point_data["ue"] = ue_boundary
     grid_ue.set_active_scalars("ue")
-    plotter.add_mesh(grid_ue, show_edges=True)
+    plotter.add_mesh(grid_ue, show_edges=True, scalar_bar_args = {"fmt": "%.3f"})
     plotter.view_xz()
     plotter.add_axes()
-    plotter.add_title("Heart potential (ue)", font_size=9)
+    plotter.add_title("Heart potential (ue_numerical)", font_size=9)
 
     plotter.subplot(1, 1)
     grid_ut = pyvista.UnstructuredGrid(*vtk_mesh(domain, tdim))
@@ -209,29 +209,29 @@ def main():
     ut_boundary[mask] = ut_boundary[boundary_index[0]]
     grid_ut.point_data["ut"] = ut_boundary
     grid_ut.set_active_scalars("ut")
-    plotter.add_mesh(grid_ut, show_edges=True)
+    plotter.add_mesh(grid_ut, show_edges=True, scalar_bar_args = {"fmt": "%.3f"})
     plotter.view_xz()
     plotter.add_axes()
-    plotter.add_title("Torso potential (ut)", font_size=9)
+    plotter.add_title("Torso potential (ut_numerical)", font_size=9)
 
-    plotter.subplot(0, 2)
-    grid_ue_error = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-    grid_ue_error.point_data["ue_error"] = ue_boundary - ue_exact_boundary
-    grid_ue_error.set_active_scalars("ue_error")
-    plotter.add_mesh(grid_ue_error, show_edges=True)
-    plotter.view_xz()
-    plotter.add_axes()
-    plotter.add_title("Heart potential error (ue_error)", font_size=9)
+    # plotter.subplot(2, 0)
+    # grid_ue_error = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
+    # grid_ue_error.point_data["ue_error"] = ue_boundary - ue_exact_boundary
+    # grid_ue_error.set_active_scalars("ue_error")
+    # plotter.add_mesh(grid_ue_error, show_edges=True, scalar_bar_args = {"fmt": "%.3f"})
+    # plotter.view_xz()
+    # plotter.add_axes()
+    # plotter.add_title("Heart potential error (ue_error)", font_size=9)
 
-    plotter.subplot(1, 2)
-    grid_ut_error = pyvista.UnstructuredGrid(*vtk_mesh(domain, tdim))
-    grid_ut_error.point_data["ut_error"] = ut_boundary - ut_exact_boundary
-    grid_ut_error.set_active_scalars("ut_error")
-    plotter.add_mesh(grid_ut_error, show_edges=True)
-    plotter.view_xz()
-    plotter.add_axes()
-    plotter.add_title("Torso potential error (ut_error)", font_size=9)
-    plotter.window_size = [1920, 1080]
+    # plotter.subplot(2, 1)
+    # grid_ut_error = pyvista.UnstructuredGrid(*vtk_mesh(domain, tdim))
+    # grid_ut_error.point_data["ut_error"] = ut_boundary - ut_exact_boundary
+    # grid_ut_error.set_active_scalars("ut_error")
+    # plotter.add_mesh(grid_ut_error, show_edges=True, scalar_bar_args = {"fmt": "%.3f"})
+    # plotter.view_xz()
+    # plotter.add_axes()
+    # plotter.add_title("Torso potential error (ut_error)", font_size=9)
+    plotter.window_size = [720, 720]
     plotter.screenshot("3d/main_analytic_forward.png")
 
 if __name__ == '__main__':

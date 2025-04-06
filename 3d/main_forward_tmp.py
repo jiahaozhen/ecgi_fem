@@ -150,7 +150,14 @@ def compute_d_from_tmp(mesh_file, v_file='3d/data/v_all.npy', sigma_i=1, sigma_e
 
 if __name__ == '__main__':
     file = "3d/data/mesh_multi_conduct_ecgsim.msh"
+    ischemia = True
     # v_data = np.load('3d/data/v.npy')
     # u_data = forward_tmp(file, v_data, multi_flag=False)
-    d = compute_d_from_tmp(file, v_file='3d/data/v_all.npy')
-    sio.savemat('3d/data/surface_potential_fem.mat', {'surface_potential_fem': d})
+    if ischemia :
+        surface_potential_file = '3d/data/ischemia_heart_cycle_fem.mat'
+        v_file='3d/data/v_all_ischemia.npy'
+    else:
+        surface_potential_file = '3d/data/sinus_rhythm_fem.mat'
+        v_file='3d/data/v_all_normal.npy'
+    d = compute_d_from_tmp(file, v_file=v_file)
+    sio.savemat(surface_potential_file, {'surface_potential_fem': d})

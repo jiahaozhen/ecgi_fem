@@ -13,7 +13,7 @@ import pyvista
 sys.path.append('.')
 from utils.helper_function import eval_function
 
-def ecgsim2fem(mesh_file, ischemic=False, t=39, plot_flag=False):
+def ecgsim2fem(mesh_file, ischemia=False, t=39, plot_flag=False):
     """
     Converts ECGsim data to a finite element mesh for body and heart domains, interpolates potential data, 
     and optionally visualizes the results.
@@ -41,8 +41,9 @@ def ecgsim2fem(mesh_file, ischemic=False, t=39, plot_flag=False):
     v_pts_ecgsim = np.array(geom_data_ecgsim['geom_ventricle']['pts'])
     d_pts_ecgsim = np.array(geom_data_ecgsim['geom_thorax']['pts'])
 
-    if ischemic:
-        file_ecgsim = h5py.File('3d/data/ischemic_ecgsim.mat', 'r')
+    if ischemia:
+        # file_ecgsim = h5py.File('3d/data/ischemic_ecgsim.mat', 'r')
+        file_ecgsim = h5py.File('3d/data/ischemia_heart_cycle_ecgsim.mat', 'r')
     else:
         file_ecgsim = h5py.File('3d/data/sinus_rhythm_ecgsim.mat', 'r')
     v_data_ecgsim = np.array(file_ecgsim['tmp'])
@@ -58,7 +59,7 @@ def ecgsim2fem(mesh_file, ischemic=False, t=39, plot_flag=False):
 
     for i in range(data_num):
         # v
-        if ischemic:
+        if ischemia:
             # griddata
             v_fem_one = scipy.interpolate.griddata(v_pts_ecgsim, v_data_ecgsim[i], v_pts_fem, method='linear', fill_value=-90)
         else:
@@ -73,10 +74,14 @@ def ecgsim2fem(mesh_file, ischemic=False, t=39, plot_flag=False):
         d_fem_one = rbf(d_pts_fem[:,0], d_pts_fem[:,1], d_pts_fem[:,2])
         u.x.array[d_index] = d_fem_one
         d_data_fem.append(u.x.array[:].copy())
-
-    np.save('3d/data/v_all.npy', v_data_fem)
-    np.save('3d/data/d_all.npy', d_data_fem)
-    if ischemic:
+    
+    if  ischemia:
+        np.save('3d/data/v_all_ischemia.npy', v_data_fem)
+        np.save('3d/data/d_all_ischemia.npy', d_data_fem)
+    else:
+        np.save('3d/data/v_all_normal.npy', v_data_fem)
+        np.save('3d/data/d_all_normal.npy', d_data_fem)
+    if ischemia:
         np.save('3d/data/v.npy', v_data_fem[t])
         np.save('3d/data/d.npy', d_data_fem[t])
         v = Function(V2)
