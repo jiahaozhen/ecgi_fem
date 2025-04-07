@@ -19,7 +19,7 @@ from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval
 
 def resting_ischemia_inversion(mesh_file, d_data, 
                                      gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
-                                     ischemia_potential=-60, normal_potential=-90, 
+                                     ischemia_potential=-80, normal_potential=-90, 
                                      tau=1, v_exact_file='3d/data/v.npy',
                                      multi_flag=True, plot_flag=False, exact_flag=False, print_message=False):
     # mesh of Body
@@ -176,7 +176,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
             print('iteration:', k)
             print('loss_residual:', assemble_scalar(form_loss))
             print('loss_reg:', assemble_scalar(form_reg))
-            print(k, 'J_p', np.linalg.norm(J_p.array))
+            print('J_p', np.linalg.norm(J_p.array))
             if exact_flag == True:
                 print('center of mass error:', compute_error(v_exact, phi)[0])
         # check if the condition is satisfied

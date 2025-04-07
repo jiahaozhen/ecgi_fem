@@ -310,7 +310,7 @@ def get_activation_time_from_v(v_data):
     activation_time = np.argmax(v_deriviative, axis=0)
     return activation_time
 
-def v_data_argument(phi_1, phi_2, tau = 1, a1 = -90, a2 = -60, a3 = 10, a4 = -20):
+def v_data_argument(phi_1, phi_2, tau = 1, a1 = -90, a2 = -80, a3 = 10, a4 = 0):
     # v = []
     # for t in range(phi_2.shape[0]):
     #     G_phi_1 = G_tau(phi_1[t], tau)

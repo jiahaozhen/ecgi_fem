@@ -16,7 +16,7 @@ sys.path.append('.')
 from utils.helper_function import v_data_argument, compute_phi_with_v_timebased
 
 def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_timeframe=5, 
-                                          u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3,
+                                          u_peak_ischemia_val=0.9, u_rest_ischemia_val=0.1,
                                           submesh_flag=False, ischemia_flag=False, 
                                           center_activation=np.array([57, 51.2, 15]), radius_activation=5,
                                           center_ischemia=np.array([89.1, 40.9, -13.3]), radius_ischemia=30,

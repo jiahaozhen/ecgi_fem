@@ -45,7 +45,7 @@ else:
 
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
-u_data = compute_v_based_on_reaction_diffusion(
+u_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(
     mesh_file, T=T, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag, 
     gdim=gdim, center_activation=center_activation, radius_activation=radius_activation,
     center_ischemia=center_ischemia, radius_ischemia=radius_ischemia,

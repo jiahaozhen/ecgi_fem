@@ -26,7 +26,7 @@ else:
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
     phi_1_result = np.load('3d/data/phi_1_result.npy')
     phi_2_result = np.load('3d/data/phi_2_result.npy')
-    v_result = np.load('3d/data/v_result.npy')
+    v_result = np.load('3d/data/v_result_2.npy')
     v_exact = np.load('3d/data/v_data_reaction_diffusion.npy')
     phi_1_exact = np.load('3d/data/phi_1_exact_reaction_diffusion.npy')
     phi_2_exact = np.load('3d/data/phi_2_exact_reaction_diffusion.npy')
