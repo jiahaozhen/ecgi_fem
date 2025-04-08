@@ -65,7 +65,7 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
             M.interpolate(rho1, cell_markers.find(4))
     Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
 
-    alpha1 = 1e-1
+    alpha1 = 1e-3
     alpha2 = 1e1
     # phi delta_phi delta_deri_phi
     phi_1 = Function(V2)
@@ -149,9 +149,11 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
     delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
     delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
 
-    phi_2.x.array[:] = np.where(phi_2_exact[timeframe-1] < 0, -tau/2, tau/2)
-    # phi_2.x.array[:] = np.full(phi_2.x.array.shape, tau/2)
-    # phi_2.x.array[:] = phi_2_exact[timeframe]
+    phi_0 = np.full(phi_2.x.array.shape, tau/2)
+    # phi_0= np.where(phi_2_exact[timeframe-1] < 0, -tau/2, tau/2)
+    # phi_0 = phi_2_exact[timeframe]
+    phi_2.x.array[:] = phi_0
+    delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
     G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
 
     # phi_2_est.x.array[:] = phi_2_exact[timeframe-1]
@@ -172,7 +174,6 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
 
     k = 0
     while (True):
-        delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
         delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
         # phi_2_mono.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0, 
         #                                  phi_2.x.array - phi_2_est.x.array, 0)
@@ -209,17 +210,18 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
             break
         k = k + 1
 
-        # updata p from partial derivative
+        # updata q from partial derivative
         phi_v = phi_2.x.array[:].copy()
         dir_q = -J_q.array.copy()
         # origin value
         alpha = 1
-        gamma = 0.6
+        gamma = 0.8
         c = 0.1
         step_search = 0
         while(True):
             # adjust p
             phi_2.x.array[:] = phi_v + alpha * dir_q
+            delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
             # compute u
             G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
             v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +
@@ -238,7 +240,7 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
             loss_cmp = loss_new - (loss + c * alpha * J_q.array.dot(dir_q))
             alpha = gamma * alpha
             step_search = step_search + 1
-            if (step_search > 20 or loss_cmp < 0):
+            if (step_search > 40 or loss_cmp < 0):
                 break
 
     plt.figure(figsize=(10, 8))
@@ -298,4 +300,4 @@ if __name__ == '__main__':
     v = np.load(v_file)
     phi_1_exact = np.load(phi_1_file)
     phi_2_exact = np.load(phi_2_file)
-    phi_1 = activation_inversion_with_ischemia(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=50)
+    phi_1 = activation_inversion_with_ischemia(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=30)

@@ -138,7 +138,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
     uh.interpolate(activation_initial_condition(u_peak_ischemia_val, u_rest_ischemia_val))
 
-    if surface_flag:
+    if surface_flag and ischemia_flag:
         u_peak.x.array[:] = np.where(v_fem_one > 0.5, u_peak_ischemia_val, 1)
         u_rest.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val, 0)
         u_activation = Function(V)

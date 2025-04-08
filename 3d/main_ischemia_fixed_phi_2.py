@@ -20,7 +20,7 @@ from utils.helper_function import G_tau, delta_tau, delta_deri_tau, compute_erro
 # if activation zone is known, find ischemia zone
 def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, phi_2_exact, timeframe,
                                gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
-                               a1=-90, a2=-60, a3=10, a4=-20, tau=1, 
+                               a1=-90, a2=-80, a3=10, a4=0, tau=1, 
                                multi_flag=True):
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
@@ -143,7 +143,7 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
 
     phi_1.x.array[:] = np.full(phi_1.x.array.shape, tau/2)
     G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
-
+    delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
     v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + 
                     (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
     # get u from p
@@ -160,7 +160,6 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
 
     k = 0
     while (True):
-        delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
         delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
 
         # cost function
@@ -196,12 +195,13 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
         dir_p = -J_p.array.copy()
         # origin value
         alpha = 1
-        gamma = 0.5
+        gamma = 0.8
         c = 0.1
         step_search = 0
         while(True):
             # adjust p
             phi_1.x.array[:] = phi_v + alpha * dir_p
+            delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
             # compute u
             G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
             v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +
@@ -219,7 +219,7 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
             loss_cmp = loss_new - (loss + c * alpha * J_p.array.dot(dir_p))
             alpha = gamma * alpha
             step_search = step_search + 1
-            if (step_search > 20 or loss_cmp < 0):
+            if (step_search > 40 or loss_cmp < 0):
                 break
 
     plt.figure(figsize=(10, 8))
@@ -279,4 +279,4 @@ if __name__ == '__main__':
     v = np.load(v_file)
     phi_1_exact = np.load(phi_1_file)
     phi_2_exact = np.load(phi_2_file)
-    phi_1 = ischemia_inversion_with_activation(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=40)
+    phi_1 = ischemia_inversion_with_activation(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=100)

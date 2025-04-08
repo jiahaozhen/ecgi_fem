@@ -4,7 +4,7 @@ from dolfinx import default_scalar_type
 from dolfinx.io import gmshio
 from dolfinx.fem import functionspace, form, Constant, Function, assemble_scalar
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
-from dolfinx.mesh import create_submesh
+from dolfinx.mesh import create_submesh, locate_entities_boundary
 from dolfinx.plot import vtk_mesh
 from ufl import TestFunction, TrialFunction, dot, grad, Measure, derivative, sqrt, inner
 from mpi4py import MPI
@@ -15,12 +15,11 @@ import pyvista
 import multiprocessing
 
 sys.path.append('.')
-from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval_function
+from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval_function, fspace2mesh, get_epi_endo_marker
 
-def resting_ischemia_inversion(mesh_file, d_data, 
-                                     gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
+def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
+                                     gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, tau=1, 
                                      ischemia_potential=-80, normal_potential=-90, 
-                                     tau=1, v_exact_file='3d/data/v.npy',
                                      multi_flag=True, plot_flag=False, exact_flag=False, print_message=False):
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
@@ -66,7 +65,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
             M.interpolate(rho1, cell_markers.find(4))
     Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
 
-    alpha1 = 1e-1
+    alpha1 = 1e-2
     # phi delta_phi delta_deri_phi
     phi = Function(V2)
     delta_phi = Function(V2)
@@ -129,13 +128,15 @@ def resting_ischemia_inversion(mesh_file, d_data,
 
     # initial phi
     phi_0 = np.full(phi.x.array.shape, tau/2)
+    # phi_0 = np.where(v_data == -80, -tau/2, tau/2)
+    # phi_0 = get_epi_endo_marker(V2) * tau / 1e2
     phi.x.array[:] = phi_0
     delta_phi.x.array[:] = delta_tau(phi.x.array, tau)
     
     # exact solution
     if exact_flag == True:
         v_exact = Function(V2)
-        v_exact.x.array[:] = np.load(v_exact_file)[0]
+        v_exact.x.array[:] = v_data
 
     # get u from p
     with b_u.localForm() as loc_b:
@@ -185,11 +186,40 @@ def resting_ischemia_inversion(mesh_file, d_data,
         k = k + 1
 
         # updata p from partial derivative
-        phi_v = phi.x.array[:].copy()
         dir_p = -J_p.array.copy()
-        # origin value
+        phi_v = phi.x.array[:].copy()
+        # sub_domain_boundary = locate_entities_boundary(subdomain_ventricle, tdim-3, 
+        #                                                    lambda x: np.full(x.shape[1], True, dtype=bool))
+        # # find points that are not on the boundary
+        # sub_domain_inner = np.setdiff1d(np.arange(sub_node_num), sub_domain_boundary)
+        # functionspace2mesh = fspace2mesh(V2)
+        # mesh2functionspace = np.argsort(functionspace2mesh)
+        # dir_p[mesh2functionspace[sub_domain_inner]] = dir_p[mesh2functionspace[sub_domain_inner]] * 2
+        
+        # Barzilai-Borwein Method
+        # J_p_current = J_p.array.copy()
+        # if k == 1:
+        #     step = 1e-3
+        # else:
+        #     s_k = phi_v - phi_v_prev
+        #     y_k = J_p_current - J_p_prev
+        #     step = np.dot(s_k, s_k) / np.dot(y_k, s_k)
+        # phi.x.array[:] = phi_v + step * dir_p
+        # phi_v_prev = phi_v.copy()
+        # J_p_prev = J_p_current.copy()
+        # # compute u
+        # delta_phi.x.array[:] = delta_tau(phi.x.array, tau)
+        # with b_u.localForm() as loc_b:
+        #     loc_b.set(0)
+        # assemble_vector(b_u, linear_form_b_u)
+        # solver.solve(b_u, u.vector)
+        # # adjust u
+        # adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+        # u.x.array[:] = u.x.array + adjustment
+        
+        # Armijo Method
         alpha = 1
-        gamma = 0.5
+        gamma = 0.8
         c = 0.1
         step_search = 0
         while(True):
@@ -233,6 +263,9 @@ def resting_ischemia_inversion(mesh_file, d_data,
     marker_val[phi.x.array < 0] = 1
     marker.x.array[:] = marker_val
 
+    marker_exact = Function(V2)
+    marker_exact.x.array[:] = np.where(v_exact.x.array == -80, 1, 0)
+
     def plot_f_on_subdomain(f, subdomain, title):
         grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
         grid.point_data["f"] = eval_function(f, subdomain.geometry.x)
@@ -247,7 +280,7 @@ def resting_ischemia_inversion(mesh_file, d_data,
     p1 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker, subdomain_ventricle, 'ischemia_result'))
     p1.start()
     if (exact_flag == True):
-        p2 = multiprocessing.Process(target=plot_f_on_subdomain, args=(v_exact, subdomain_ventricle, 'ischemia_exact'))
+        p2 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker_exact, subdomain_ventricle, 'ischemia_exact'))
         p2.start()
         p2.join()
     p1.join()
@@ -257,5 +290,5 @@ if __name__ == '__main__':
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
     # d = np.load('3d/data/d.npy')
     d = np.load('3d/data/u_data_reaction_diffusion.npy')[0]
-    v_exact_file = '3d/data/v_data_reaction_diffusion.npy'
-    resting_ischemia_inversion(mesh_file, d, plot_flag=True, exact_flag=True, v_exact_file=v_exact_file, print_message=True)
+    v = np.load('3d/data/v_data_reaction_diffusion.npy')[0]
+    resting_ischemia_inversion(mesh_file, d_data=d, v_data=v, plot_flag=True, exact_flag=True, print_message=True)

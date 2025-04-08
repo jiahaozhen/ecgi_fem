@@ -4,6 +4,8 @@ from dolfinx.geometry import bb_tree, compute_collisions_points, compute_collidi
 from dolfinx.fem import functionspace, Function, Expression
 from .normals_and_tangents import facet_vector_approximation
 import numpy as np
+import h5py
+import scipy.interpolate
 
 # G function
 def G(s):
@@ -333,3 +335,17 @@ def compute_error_phi(phi_exact, phi_result, function_space):
     cm2 = np.mean(coordinates_ischemia_result, axis=0)
     cm = np.linalg.norm(cm1-cm2)
     return cm
+
+def get_epi_endo_marker(function_space):
+    # This function is used to get the marker for epi and endo
+    # 1 for epi and -1 for endo
+    geom_data_ecgsim = h5py.File('3d/data/geom_ecgsim.mat', 'r')
+    pts_ecgsim = np.array(geom_data_ecgsim['geom_ventricle']['pts'])
+    marker_ecgsim_file = h5py.File('3d/data/marker_epi_endo.mat', 'r')
+    marker_ecgsim = np.array(marker_ecgsim_file['marker'])
+    pts_fem = function_space.tabulate_dof_coordinates()
+    # rbf
+    rbf = scipy.interpolate.RBFInterpolator(pts_ecgsim, marker_ecgsim, kernel='linear')
+    marker = rbf(pts_fem).flatten()
+    marker = np.where(marker > 0, 1, -1)
+    return marker
