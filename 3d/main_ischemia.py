@@ -15,7 +15,7 @@ import pyvista
 import multiprocessing
 
 sys.path.append('.')
-from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval_function, fspace2mesh, get_epi_endo_marker
+from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval_function, find_vertex_with_neighbour_less_than_0
 
 def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
                                      gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, tau=1, 
@@ -65,7 +65,7 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
             M.interpolate(rho1, cell_markers.find(4))
     Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
 
-    alpha1 = 1e-2
+    alpha1 = 1e-1
     # phi delta_phi delta_deri_phi
     phi = Function(V2)
     delta_phi = Function(V2)
@@ -151,6 +151,7 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
     cm_cmp_per_iter = []
 
     k = 0
+    total_iter = 1e2
     while (True):
         delta_deri_phi.x.array[:] = delta_deri_tau(phi.x.array, tau)
 
@@ -181,13 +182,16 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
             if exact_flag == True:
                 print('center of mass error:', compute_error(v_exact, phi)[0])
         # check if the condition is satisfied
-        if (k > 1e2 or np.linalg.norm(J_p.array) < 1e-1):
+        if (k > total_iter or np.linalg.norm(J_p.array) < 1e-1):
             break
         k = k + 1
 
         # updata p from partial derivative
         dir_p = -J_p.array.copy()
         phi_v = phi.x.array[:].copy()
+        # marker = get_epi_endo_marker(V2)
+        # dir_p = dir_p * 10
+        # dir_p = np.where(marker == 1, dir_p, dir_p * 5)
         # sub_domain_boundary = locate_entities_boundary(subdomain_ventricle, tdim-3, 
         #                                                    lambda x: np.full(x.shape[1], True, dtype=bool))
         # # find points that are not on the boundary
@@ -240,7 +244,22 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
             loss_cmp = loss_new - (loss + c * alpha * J_p.array.dot(dir_p))
             alpha = gamma * alpha
             step_search = step_search + 1
-            if (step_search > 20 or loss_cmp < 0):
+            if (step_search > 100 or loss_cmp < 0):
+                # for p < 0, make its neighbor smaller
+                neighbor_idx = find_vertex_with_neighbour_less_than_0(subdomain_ventricle, phi) 
+                # make them smaller
+                phi.x.array[neighbor_idx] = np.where(phi.x.array[neighbor_idx] >= 0, 
+                                                     phi.x.array[neighbor_idx] - tau / total_iter, 
+                                                     phi.x.array[neighbor_idx])
+                # compute u
+                delta_phi.x.array[:] = delta_tau(phi.x.array, tau)
+                with b_u.localForm() as loc_b:
+                    loc_b.set(0)
+                assemble_vector(b_u, linear_form_b_u)
+                solver.solve(b_u, u.vector)
+                # adjust u
+                adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+                u.x.array[:] = u.x.array + adjustment
                 break
 
     if plot_flag == False:

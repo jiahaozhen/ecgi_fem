@@ -349,3 +349,34 @@ def get_epi_endo_marker(function_space):
     marker = rbf(pts_fem).flatten()
     marker = np.where(marker > 0, 1, -1)
     return marker
+
+def find_connected_vertex(domain, vertex):
+    
+    domain.topology.create_connectivity(0, domain.topology.dim)
+    domain.topology.create_connectivity(domain.topology.dim, 0)
+    
+    incident_cells = domain.topology.connectivity(0, domain.topology.dim).links(vertex)
+    
+    connected_vertices = set()
+    for cell in incident_cells:
+        cell_vertices = domain.topology.connectivity(domain.topology.dim, 0).links(cell)
+        connected_vertices.update(cell_vertices)
+    
+    connected_vertices.discard(vertex)
+    connected_vertices = sorted(list(connected_vertices))
+    
+    return connected_vertices
+
+def find_vertex_with_neighbour_less_than_0(domain, f:Function):
+    index_function = np.where(f.x.array < 0)[0]
+    f2mesh = fspace2mesh(f.function_space)
+    mesh2f = np.argsort(f2mesh)
+    index_mesh = f2mesh[index_function]
+    neighbor_idx = set()
+    for i in index_mesh:
+        # find connected vertex
+        neighbor = find_connected_vertex(domain, i)
+        neighbor_idx.update(neighbor)
+    # all connected vertex
+    neighbor_idx = mesh2f[np.array(list(neighbor_idx), dtype=int)]
+    return neighbor_idx

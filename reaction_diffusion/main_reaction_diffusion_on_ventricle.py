@@ -93,6 +93,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_tim
     
     # the earliest node: 146
     # node 146 coordinates: (57, 51.2, 15)
+    # TODO: multiple activation points
     class activation_initial_condition():
         def __init__(self, u_peak_ischemia, u_rest_ischemia, u_peak_healthy=1, u_rest_healthy=0, 
                     center_a=center_activation, r_a=radius_activation, center_i=center_ischemia, r_i=radius_ischemia):
