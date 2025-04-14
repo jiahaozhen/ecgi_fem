@@ -212,7 +212,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
                                              phi_2.x.array - phi_2_est.x.array, 0)
 
         k = 0
-        iter_total = 1e2
+        iter_total = 100
         loss_in_timeframe = []
         while (True):
             # cost function

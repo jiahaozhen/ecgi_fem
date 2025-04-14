@@ -173,7 +173,7 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
     cm_cmp_per_iter = []
 
     k = 0
-    total_iter = 1e3
+    total_iter = 1000
     while (True):
         delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
         # phi_2_mono.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0, 
