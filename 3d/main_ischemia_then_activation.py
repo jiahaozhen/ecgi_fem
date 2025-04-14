@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 
 sys.path.append('.')
-from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function, compute_error_phi
+from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function, compute_error_phi, find_vertex_with_neighbour_less_than_0
 
 def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, alpha4,
                        phi_1_exact = np.load('3d/data/phi_1_exact_reaction_diffusion.npy'), 
@@ -142,7 +142,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
     reg_p_1 = alpha1 * (phi_1 - phi_1_est) * u2 * dx2
     reg_p_2 = derivative(alpha3 * delta_phi_1 * sqrt(inner(grad(phi_1), grad(phi_1)) + 1e-8) * dx2, phi_1, u2)
     form_Residual_p = form(residual_p, entity_maps=entity_map)
-    form_Reg_p = form(reg_p_1 + reg_p_2, entity_maps=entity_map)
+    form_Reg_p = form(reg_p_2, entity_maps=entity_map)
     J_p = create_vector(form_Residual_p)
     Reg_p = create_vector(form_Reg_p)
 
@@ -165,7 +165,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
     #initial phi_2
     phi_1.x.array[:] = phi_1_init
     # phi_2.x.array[:] = np.full(phi_2.x.array.shape, tau/2)
-    # phi_2.x.array[:] = np.where(phi_2_exact[0] < 0, -tau/2, tau/2)
+    phi_2.x.array[:] = np.where(phi_2_exact[0] < 0, -tau/2, tau/2)
 
     # phi result
     phi_1_result = np.zeros((time_total, sub_node_num))
@@ -187,7 +187,6 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
     for timeframe in range(time_total):
 
         start_time = time.time()
-        phi_2.x.array[:] = phi_2_exact[timeframe]
 
         d.x.array[:] = d_data[timeframe]
         if timeframe == 0:
@@ -213,6 +212,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
                                              phi_2.x.array - phi_2_est.x.array, 0)
 
         k = 0
+        iter_total = 1e2
         loss_in_timeframe = []
         while (True):
             # cost function
@@ -237,7 +237,42 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
             J_q.axpy(1.0, Reg_q)
         
             # check if the condition is satisfied
-            if (k > 1e2 or np.linalg.norm(J_q.array) < 1e-1):
+            if (k > iter_total or np.linalg.norm(J_q.array) < 1e-1):
+                phi_2.x.array[:] = np.where(phi_2.x.array < 0, phi_2.x.array - tau / 2 , phi_2.x.array)
+                neighbour_idx, neighbour_map = find_vertex_with_neighbour_less_than_0(subdomain_ventricle, phi_2)
+                neighbour_weight = [neighbour_map[i] for i in neighbour_idx]
+                phi_2.x.array[neighbour_idx] = np.where(phi_2.x.array[neighbour_idx] >= 0,
+                                                        phi_2.x.array[neighbour_idx] - 2 * np.array(neighbour_weight) * tau / time_total, 
+                                                        phi_2.x.array[neighbour_idx])
+                G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
+                delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+                delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
+                phi_2_I.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0, 1, 0)
+                phi_2_mono.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0,
+                                                    phi_2.x.array - phi_2_est.x.array, 0)
+                v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + 
+                                (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
+                with b_u.localForm() as loc_b:
+                    loc_b.set(0)
+                assemble_vector(b_u, linear_form_b_u)
+                solver.solve(b_u, u.vector)
+                # adjust u
+                adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+                u.x.array[:] = u.x.array + adjustment
+                loss = assemble_scalar(form_loss) + assemble_scalar(form_reg)
+                # get w from u
+                with b_w.localForm() as loc_w:
+                    loc_w.set(0)
+                assemble_vector(b_w, linear_form_b_w)
+                solver.solve(b_w, w.vector)
+                # compute partial derivative of q from w
+                with J_q.localForm() as loc_jq:
+                    loc_jq.set(0)
+                assemble_vector(J_q, form_Residual_q)
+                with Reg_q.localForm() as loc_rq:
+                    loc_rq.set(0)
+                assemble_vector(Reg_q, form_Reg_q)
+                J_q.axpy(1.0, Reg_q)
                 break
             k = k + 1
 
@@ -245,7 +280,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
             phi_2_v = phi_2.x.array[:].copy()
             dir_q = -J_q.array.copy()
             alpha = 1
-            gamma = 0.5
+            gamma = 0.8
             c = 1e-1
             step_search = 0
             while(True):
@@ -273,7 +308,24 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
                 loss_cmp = loss_new - loss_target
                 alpha = gamma * alpha
                 step_search = step_search + 1
-                if (step_search > 30 or loss_cmp < 0):
+                if (step_search > 1e2 or loss_cmp < 0):
+                    # neighbour_idx = find_vertex_with_neighbour_less_than_0(subdomain_ventricle, phi_2)
+                    # phi_2.x.array[neighbour_idx] = np.where(phi_2.x.array[neighbour_idx] >= 0, 
+                    #                                         phi_2.x.array[neighbour_idx] - tau / iter_total, 
+                    #                                         phi_2.x.array[neighbour_idx])
+                    # G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
+                    # delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+                    # phi_2_mono.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0,
+                    #                                     phi_2.x.array - phi_2_est.x.array, 0)
+                    # v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + 
+                    #                 (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
+                    # with b_u.localForm() as loc_b:
+                    #     loc_b.set(0)
+                    # assemble_vector(b_u, linear_form_b_u)
+                    # solver.solve(b_u, u.vector)
+                    # # adjust u
+                    # adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+                    # u.x.array[:] = u.x.array + adjustment
                     break
 
         end_time = time.time()
@@ -304,8 +356,9 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
 
     # fix phi_2 for phi_1
     print('start adjust phi_1 with phi_2 fixed')
+    form_reg = form(reg_element_3, entity_maps=entity_map)
 
-    def compute_u_from_phi_1(phi_1):
+    def compute_u_from_phi_1(phi_1: Function):
         G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
         delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
         delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
@@ -330,7 +383,7 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
             u_array[timeframe] = u.x.array.copy()
         return u_array
 
-    def compute_Jp_from_phi_1(phi_1, u_array):
+    def compute_Jp_from_phi_1(phi_1: Function, u_array: np.ndarray):
         if u_array is None:
             u_array = compute_u_from_phi_1(phi_1)
         J_p_array = np.full_like(phi_1.x.array, 0)
@@ -353,18 +406,24 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
             with J_p.localForm() as loc_jp:
                 loc_jp.set(0)
             assemble_vector(J_p, form_Residual_p)
-            J_p_array  = J_p_array + J_p.array.copy()
+            with Reg_p.localForm() as loc_rp:
+                loc_rp.set(0)
+            assemble_vector(Reg_p, form_Reg_p)
+            J_p_array  = J_p_array + J_p.array.copy() + Reg_p.array.copy()
         return J_p_array
         
-    def compute_loss_from_phi_1(phi_1, u_array):
+    def compute_loss_from_phi_1(phi_1: Function, u_array: np.ndarray):
         if u_array is None:
             u_array = compute_u_from_phi_1(phi_1)
-        loss = 0
-        for timeframe in range(time_total):
+        loss_residual = 0
+        loss_reg = 0
+        delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
+        for timeframe in range(time_total):    
             d.x.array[:] = d_data[timeframe]
             u.x.array[:] = u_array[timeframe]
-            loss = loss + assemble_scalar(form_loss)
-        return loss
+            loss_residual = loss_residual + assemble_scalar(form_loss)
+            loss_reg = loss_reg + assemble_scalar(form_reg)
+        return loss_residual, loss_reg
 
     loss_per_iter = []
     cm_phi_1_per_iter = []
@@ -372,7 +431,8 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
     u_array = compute_u_from_phi_1(phi_1)
     start_time = time.time()
     while (True):
-        loss = compute_loss_from_phi_1(phi_1, u_array)
+        loss_residual, loss_reg = compute_loss_from_phi_1(phi_1, u_array)
+        loss = loss_residual + loss_reg
 
         loss_per_iter.append(loss)
         cm1 = compute_error_phi(phi_1.x.array, phi_1_exact[0], V2)
@@ -380,7 +440,8 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
         J_p_array =  compute_Jp_from_phi_1(phi_1, u_array)
         end_time = time.time()
         print('iteration:', k)
-        print('loss', loss)
+        print('loss_residual:', loss_residual)
+        print('loss_reg:', loss_reg)
         print('J_p:', np.linalg.norm(J_p_array))
         print('center of mass error:', cm1)
         print('cost', end_time - start_time, 'seconds')
@@ -401,50 +462,32 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
             # compute u
             u_array = compute_u_from_phi_1(phi_1)
             # compute loss
-            loss_new = compute_loss_from_phi_1(phi_1, u_array)
+            loss_residual_new, loss_reg_new = compute_loss_from_phi_1(phi_1, u_array)
+            loss_new = loss_residual_new + loss_reg_new
             loss_cmp = loss_new - (loss + c * alpha * J_p_array.dot(dir_p))
             alpha = gamma * alpha
             step_search = step_search + 1
-            if (step_search > 20 or loss_cmp < 0):
+            if (step_search > 1e2 or loss_cmp < 0):
                 break
     
+    G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau/10)
     for timeframe in range(time_total):
         phi_1_result[timeframe] = phi_1.x.array.copy()
         phi_2.x.array[:] = phi_2_result[timeframe]
-        v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +
-                        (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
-        v_result_2[timeframe] = v.x.array.copy()
-        cc = np.corrcoef(v_exact[timeframe], v_result_2[timeframe])[0, 1]
-        cc_2_per_timeframe.append(cc)
+        
+        G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau/10)
+        v_result_2[timeframe] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array + 
+                                 (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
 
     if gdim == 2:
         np.save('2d/data/phi_1_result.npy', phi_1_result)
-        np.save('2d/data/v_result_2.npy', v_result_2)
+        np.save('2d/data/v_result.npy', v_result_2)
     else:
         np.save('3d/data/phi_1_result.npy', phi_1_result)
-        np.save('3d/data/v_result_2.npy', v_result_2)
+        np.save('3d/data/v_result.npy', v_result_2)
 
     if plot_flag == False:
         return phi_1_result, phi_2_result, v_result_2
-
-    # def plot_loss():
-    #     plt.subplot(2, 2, 1)
-    #     plt.plot(np.linspace(0, 40, 201), loss_1_per_timeframe)
-    #     plt.title('cost functional')
-    #     plt.xlabel('time')
-    #     plt.subplot(2, 2, 2)
-    #     plt.plot(np.linspace(0, 40, 201), cc_1_per_timeframe)
-    #     plt.title('correlation coefficient')
-    #     plt.xlabel('time')
-    #     plt.subplot(2, 2, 3)
-    #     plt.plot(loss_per_iter)
-    #     plt.title('cost functional')
-    #     plt.xlabel('time')
-    #     plt.subplot(2, 2, 4)
-    #     plt.plot(np.linspace(0, 40, 201), cc_2_per_timeframe)
-    #     plt.title('correlation coefficient')
-    #     plt.xlabel('time')
-    #     plt.show()
 
     def plot_with_time(value, title):
         v_function = Function(V2)
@@ -466,17 +509,14 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, 
     p2 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_2_result < 0, 1, 0), 'activation'))
     p3 = multiprocessing.Process(target=plot_with_time, args=(v_result_2, 'v_result'))
     p4 = multiprocessing.Process(target=plot_with_time, args=(v_exact, 'v_exact'))
-    # p5 = multiprocessing.Process(target=plot_loss)
     p1.start()
     p2.start()
     p3.start()
     p4.start()
-    # p5.start()
     p1.join()
     p2.join()
     p3.join()
     p4.join()
-    # p5.join()
 
     return phi_1_result, phi_2_result, v_result_2
 
@@ -493,5 +533,5 @@ if __name__ == '__main__':
     v_exact = np.load(v_exact_data_file)
     d_data = np.load(d_data_file)
     phi_1, phi_2, v_result = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_exact=v_exact, gdim=3, 
-                                                tau=1, alpha1=1e0, alpha2=1e-100, alpha3=5e0, alpha4=1e-100,
+                                                tau=1, alpha1=1e0, alpha2=1e5, alpha3=1e2, alpha4=1e-1,
                                                 plot_flag=True, print_message=True)

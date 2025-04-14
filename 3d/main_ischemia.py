@@ -20,7 +20,8 @@ from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval
 def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
                                      gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, tau=1, 
                                      ischemia_potential=-80, normal_potential=-90, 
-                                     multi_flag=True, plot_flag=False, exact_flag=False, print_message=False):
+                                     multi_flag=True, plot_flag=False, exact_flag=False, print_message=False,
+                                     transmural_flag=False):
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
@@ -245,21 +246,22 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
             alpha = gamma * alpha
             step_search = step_search + 1
             if (step_search > 100 or loss_cmp < 0):
-                # for p < 0, make its neighbor smaller
-                neighbor_idx = find_vertex_with_neighbour_less_than_0(subdomain_ventricle, phi) 
-                # make them smaller
-                phi.x.array[neighbor_idx] = np.where(phi.x.array[neighbor_idx] >= 0, 
-                                                     phi.x.array[neighbor_idx] - tau / total_iter, 
-                                                     phi.x.array[neighbor_idx])
-                # compute u
-                delta_phi.x.array[:] = delta_tau(phi.x.array, tau)
-                with b_u.localForm() as loc_b:
-                    loc_b.set(0)
-                assemble_vector(b_u, linear_form_b_u)
-                solver.solve(b_u, u.vector)
-                # adjust u
-                adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
-                u.x.array[:] = u.x.array + adjustment
+                if transmural_flag == True:
+                    # for p < 0, make its neighbor smaller
+                    neighbour_idx, _ = find_vertex_with_neighbour_less_than_0(subdomain_ventricle, phi) 
+                    # make them smaller
+                    phi.x.array[neighbour_idx] = np.where(phi.x.array[neighbour_idx] >= 0, 
+                                                          phi.x.array[neighbour_idx] - tau / total_iter, 
+                                                          phi.x.array[neighbour_idx])
+                    # compute u
+                    delta_phi.x.array[:] = delta_tau(phi.x.array, tau)
+                    with b_u.localForm() as loc_b:
+                        loc_b.set(0)
+                    assemble_vector(b_u, linear_form_b_u)
+                    solver.solve(b_u, u.vector)
+                    # adjust u
+                    adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+                    u.x.array[:] = u.x.array + adjustment
                 break
 
     if plot_flag == False:

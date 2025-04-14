@@ -1,5 +1,5 @@
 from ufl import grad
-from dolfinx.mesh import locate_entities_boundary, meshtags, exterior_facet_indices, create_submesh
+from dolfinx.mesh import locate_entities_boundary, meshtags, exterior_facet_indices, create_submesh, Mesh
 from dolfinx.geometry import bb_tree, compute_collisions_points, compute_colliding_cells
 from dolfinx.fem import functionspace, Function, Expression
 from .normals_and_tangents import facet_vector_approximation
@@ -336,7 +336,7 @@ def compute_error_phi(phi_exact, phi_result, function_space):
     cm = np.linalg.norm(cm1-cm2)
     return cm
 
-def get_epi_endo_marker(function_space):
+def get_epi_endo_marker(function_space: functionspace):
     # This function is used to get the marker for epi and endo
     # 1 for epi and -1 for endo
     geom_data_ecgsim = h5py.File('3d/data/geom_ecgsim.mat', 'r')
@@ -350,7 +350,7 @@ def get_epi_endo_marker(function_space):
     marker = np.where(marker > 0, 1, -1)
     return marker
 
-def find_connected_vertex(domain, vertex):
+def find_connected_vertex(domain: Mesh, vertex: int):
     
     domain.topology.create_connectivity(0, domain.topology.dim)
     domain.topology.create_connectivity(domain.topology.dim, 0)
@@ -367,16 +367,22 @@ def find_connected_vertex(domain, vertex):
     
     return connected_vertices
 
-def find_vertex_with_neighbour_less_than_0(domain, f:Function):
+def find_vertex_with_neighbour_less_than_0(domain: Mesh, f: Function):
     index_function = np.where(f.x.array < 0)[0]
     f2mesh = fspace2mesh(f.function_space)
     mesh2f = np.argsort(f2mesh)
     index_mesh = f2mesh[index_function]
+
+    neighbor_map = {}
     neighbor_idx = set()
+
     for i in index_mesh:
-        # find connected vertex
-        neighbor = find_connected_vertex(domain, i)
-        neighbor_idx.update(neighbor)
-    # all connected vertex
+        neighbors = find_connected_vertex(domain, i)
+        neighbor_idx.update(neighbors)
+        for j in neighbors:
+            neighbor_map[j] = neighbor_map.get(j, 0) + 1
+
     neighbor_idx = mesh2f[np.array(list(neighbor_idx), dtype=int)]
-    return neighbor_idx
+    neighbor_map = {mesh2f[k]: v for k, v in neighbor_map.items()}
+
+    return neighbor_idx, neighbor_map

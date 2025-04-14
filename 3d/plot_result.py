@@ -11,7 +11,7 @@ import multiprocessing
 import matplotlib.pyplot as plt
 
 sys.path.append('.')
-from utils.helper_function import eval_function
+from utils.helper_function import eval_function, compute_error_phi
 
 gdim = 3
 if gdim == 2:
@@ -26,7 +26,7 @@ else:
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
     phi_1_result = np.load('3d/data/phi_1_result.npy')
     phi_2_result = np.load('3d/data/phi_2_result.npy')
-    v_result = np.load('3d/data/v_result_2.npy')
+    v_result = np.load('3d/data/v_result.npy')
     v_exact = np.load('3d/data/v_data_reaction_diffusion.npy')
     phi_1_exact = np.load('3d/data/phi_1_exact_reaction_diffusion.npy')
     phi_2_exact = np.load('3d/data/phi_2_exact_reaction_diffusion.npy')
@@ -61,11 +61,20 @@ for i in range(phi_2_exact.shape[0]):
     cc_phi_2.append(np.corrcoef(marker_phi_2[i], marker_phi_2_result[i])[0, 1])
 cc = np.array(cc_phi_2)
 
-def plot_cc(cc, title):
-    plt.plot(np.linspace(0, 40, 201), cc)
+cm_phi_1 = []
+for i in range(phi_1_result.shape[0]):
+    cm_phi_1.append(compute_error_phi(phi_1_exact[i], phi_1_result[i], V2))
+cm_phi_1 = np.array(cm_phi_1)
+
+cm_phi_2 = []
+for i in range(phi_2_result.shape[0]):
+    cm_phi_2.append(compute_error_phi(phi_2_exact[i], phi_2_result[i], V2))
+cm_phi_2 = np.array(cm_phi_2)
+
+def plot_seq(seq, title):
+    plt.plot(np.linspace(0, 40, 201), seq)
     plt.xlabel('Time')
-    plt.ylabel('Correlation Coefficient')
-    plt.title('Correlation Coefficient of ' + title)
+    plt.title(title)
     plt.show()
 
 def plot_with_time(value, title):
@@ -90,9 +99,11 @@ p3 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_1_exact <
 p4 = multiprocessing.Process(target=plot_with_time, args=(np.where(phi_2_exact < 0, 1, 0), 'activation_exact'))
 p5 = multiprocessing.Process(target=plot_with_time, args=(v_result, 'v_result'))
 p6 = multiprocessing.Process(target=plot_with_time, args=(v_exact, 'v_exact'))
-p7 = multiprocessing.Process(target=plot_cc, args=(cc_v, 'v'))
-p8 = multiprocessing.Process(target=plot_cc, args=(cc_phi_1, 'phi_1'))
-p9 = multiprocessing.Process(target=plot_cc, args=(cc_phi_2, 'phi_2'))
+p7 = multiprocessing.Process(target=plot_seq, args=(cc_v, 'cc_v'))
+# p8 = multiprocessing.Process(target=plot_seq, args=(cc_phi_1, 'cc_phi_1'))
+# p9 = multiprocessing.Process(target=plot_seq, args=(cc_phi_2, 'cc_phi_2'))
+p10 = multiprocessing.Process(target=plot_seq, args=(cm_phi_1, 'cm_phi_1'))
+p11 = multiprocessing.Process(target=plot_seq, args=(cm_phi_2, 'cm_phi_2'))
 p1.start()
 p2.start()
 p3.start()
@@ -100,8 +111,10 @@ p4.start()
 p5.start()
 p6.start()
 p7.start()
-p8.start()
-p9.start()
+# p8.start()
+# p9.start()
+p10.start()
+p11.start()
 p1.join()
 p2.join()
 p3.join()
@@ -109,5 +122,7 @@ p4.join()
 p5.join()
 p6.join()
 p7.join()
-p8.join()
-p9.join()
+# p8.join()
+# p9.join()
+p10.join()
+p11.join()

@@ -15,12 +15,12 @@ import pyvista
 import multiprocessing
 
 sys.path.append('.')
-from utils.helper_function import G_tau, delta_tau, delta_deri_tau, compute_error_phi, eval_function
+from utils.helper_function import G_tau, delta_tau, delta_deri_tau, compute_error_phi, eval_function, find_vertex_with_neighbour_less_than_0
 
 # if ischemia zone is known, find activation zone
 def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, phi_2_exact, timeframe,
                                gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
-                               a1=-90, a2=-60, a3=10, a4=-20, tau=1, 
+                               a1=-90, a2=-80, a3=10, a4=0, tau=1, 
                                multi_flag=True):
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
@@ -65,7 +65,7 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
             M.interpolate(rho1, cell_markers.find(4))
     Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
 
-    alpha1 = 1e-3
+    alpha1 = 1e-1
     alpha2 = 1e1
     # phi delta_phi delta_deri_phi
     phi_1 = Function(V2)
@@ -173,6 +173,7 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
     cm_cmp_per_iter = []
 
     k = 0
+    total_iter = 1e3
     while (True):
         delta_deri_phi_2.x.array[:] = delta_deri_tau(phi_2.x.array, tau)
         # phi_2_mono.x.array[:] = np.where(phi_2.x.array - phi_2_est.x.array > 0, 
@@ -206,7 +207,7 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
         J_q = J_q + Reg_q
         # print('J_q', np.linalg.norm(J_q.array))
         # check if the condition is satisfied
-        if (k > 1e2 or np.linalg.norm(J_q.array) < 1e-1):
+        if (k > total_iter or np.linalg.norm(J_q.array) < 1e-1):
             break
         k = k + 1
 
@@ -241,6 +242,22 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
             alpha = gamma * alpha
             step_search = step_search + 1
             if (step_search > 40 or loss_cmp < 0):
+                neighbor_idx = find_vertex_with_neighbour_less_than_0(subdomain_ventricle, phi_2)
+                phi_2.x.array[neighbor_idx] = np.where(phi_2.x.array[neighbor_idx] >= 0, 
+                                                       phi_2.x.array[neighbor_idx] - tau / total_iter, 
+                                                       phi_2.x.array[neighbor_idx])
+                delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
+                # compute u
+                G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
+                v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +
+                                (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
+                with b_u.localForm() as loc_b:
+                    loc_b.set(0)
+                assemble_vector(b_u, linear_form_b_u)
+                solver.solve(b_u, u.vector)
+                # adjust u
+                adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+                u.x.array[:] = u.x.array + adjustment
                 break
 
     plt.figure(figsize=(10, 8))
@@ -300,4 +317,4 @@ if __name__ == '__main__':
     v = np.load(v_file)
     phi_1_exact = np.load(phi_1_file)
     phi_2_exact = np.load(phi_2_file)
-    phi_1 = activation_inversion_with_ischemia(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=30)
+    phi_1 = activation_inversion_with_ischemia(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=100)
