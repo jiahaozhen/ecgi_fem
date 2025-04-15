@@ -253,7 +253,7 @@ def submesh_node_index(domain, cell_markers, sub_tag):
                 sub2parent_node[sub_point] = parent_point
     return sub2parent_node
 
-def eval_function(u, points):
+def eval_function(u: Function, points: np.ndarray):
     if points.ndim == 1:
         points = points.reshape(1, -1)
     domain = u.function_space.mesh
@@ -386,3 +386,28 @@ def find_vertex_with_neighbour_less_than_0(domain: Mesh, f: Function):
     neighbor_map = {mesh2f[k]: v for k, v in neighbor_map.items()}
 
     return neighbor_idx, neighbor_map
+
+def find_vertex_with_coordinate(domain: Mesh, x: np.ndarray):
+    points = domain.geometry.x
+    distances = np.linalg.norm(points - x, axis=1)
+    closest_vertex = np.argmin(distances)
+    return closest_vertex
+    
+def transfer_bsp_to_standard12lead(bsp_data: np.ndarray, lead_index: np.ndarray):
+    standard12Lead = np.zeros((bsp_data.shape[0], 12))
+    # I = VL - VR
+    standard12Lead[:,0] = bsp_data[:,lead_index[7]] - bsp_data[:,lead_index[6]]
+    # II = VF - VR
+    standard12Lead[:,1] = bsp_data[:,lead_index[8]] - bsp_data[:,lead_index[6]]
+    # III = VF - VL
+    standard12Lead[:,2] = bsp_data[:,lead_index[8]] - bsp_data[:,lead_index[7]]
+    # Vi = Vi - (VR + VL + VF) / 3
+    standard12Lead[:, 3:9] = bsp_data[:, lead_index[0:6]] - np.mean(bsp_data[:, lead_index[6:9]], axis=1, keepdims=True)
+    # aVR = VR - (VL + VF) / 2
+    standard12Lead[:, 9] = bsp_data[:, lead_index[6]] - np.mean(bsp_data[:, lead_index[7:9]], axis=1)
+    # aVL = VL - (VR + VF) / 2
+    standard12Lead[:, 10] = bsp_data[:, lead_index[7]] - np.mean(bsp_data[:, [lead_index[6], lead_index[8]]], axis=1)
+    # aVF = VF - (VR + VL) / 2
+    standard12Lead[:, 11] = bsp_data[:, lead_index[8]] - np.mean(bsp_data[:, lead_index[6:8]], axis=1)
+    
+    return standard12Lead

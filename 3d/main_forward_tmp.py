@@ -136,12 +136,12 @@ def extract_d_from_u(mesh_file, points, u_data):
     total_num = len(u_data)
     for i in range(total_num):
         u.x.array[:] = u_data[i]
-        d = eval_function(u, points)
+        d = eval_function(u, points).squeeze()
         d_data.append(d.copy())
     return np.array(d_data)
 
-def compute_d_from_tmp(mesh_file, v_file='3d/data/v_all.npy', sigma_i=1, sigma_e=1.7, sigma_t=2.6, multi_flag=True):
-    v_data = np.load(v_file)
+def compute_d_from_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_flag=True):
+    # v_data = np.load(v_file)
     u_data = forward_tmp(mesh_file, v_data, sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t, multi_flag=multi_flag)
     geom = h5py.File('3d/data/geom_ecgsim.mat', 'r')
     points = np.array(geom['geom_thorax']['pts'])
