@@ -7,7 +7,8 @@ from dolfinx.fem import functionspace, Function
 from mpi4py import MPI
 import pyvista
 import numpy as np
-from main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
+# from main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
+from main_reaction_diffusion import compute_v_based_on_reaction_diffusion
 
 sys.path.append('.')
 from utils.helper_function import eval_function
@@ -45,12 +46,13 @@ else:
 
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
-u_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(
-    mesh_file, T=T, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag, 
-    gdim=gdim, center_activation=center_activation, radius_activation=radius_activation,
-    center_ischemia=center_ischemia, radius_ischemia=radius_ischemia,
-    data_argument=False, surface_flag=True
-)
+u_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, surface_flag=True)
+# u_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(
+#     mesh_file, T=T, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag, 
+#     gdim=gdim, center_activation=center_activation, radius_activation=radius_activation,
+#     center_ischemia=center_ischemia, radius_ischemia=radius_ischemia,
+#     data_argument=False, surface_flag=True
+# )
 
 plotter = pyvista.Plotter()
 grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
@@ -70,7 +72,7 @@ else:
 plotter.open_gif(name)
 
 t = 0
-time_step = 0.2
+time_step = 0.1
 for i in range(u_data.shape[0]):
     u.x.array[:] = u_data[i]
     grid["u"] = eval_function(u, subdomain_ventricle.geometry.x)

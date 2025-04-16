@@ -86,8 +86,8 @@ last_time = 0
 for i in range(num_steps):
     t += dt
     if i in activation_dict:
-        u_n.x.array[activation_dict[i]] = 1
-        # J_stim.x.array[activation_dict[i]] = 0.5
+        # u_n.x.array[activation_dict[i]] = 1
+        J_stim.x.array[activation_dict[i]] = 0.5
         last_time = 50
     else:
         last_time = last_time - 1
@@ -103,6 +103,7 @@ for i in range(num_steps):
     u_data.append(u_n.x.array.copy())
 u_data = np.array(u_data)
 u_data = np.where(u_data > 1, 1, u_data)
+u_data = np.where(u_data < 0, 0, u_data)
 u_data = u_data * 100 - 90
 d_data_fem = compute_d_from_tmp(mesh_file, v_data=u_data)
 d_data_ecgsim = np.array(h5py.File('3d/data/sinus_rhythm_ecgsim.mat','r')['surface_potential'])
@@ -122,8 +123,8 @@ time_fem = np.arange(0, standard12Lead_fem.shape[0] / 10, 0.1)
 time_ecgsim = np.arange(0, standard12Lead_ecgsim.shape[0], 1)
 for i, ax in enumerate(axs.flat):
     ax.plot(time_fem, standard12Lead_fem[:, i])
-    # ax.plot(time_ecgsim, standard12Lead_ecgsim[:, i], linestyle='--')
-    # ax.legend(['FEM', 'ECGsim'], loc='upper right')
+    ax.plot(time_ecgsim, standard12Lead_ecgsim[:, i], linestyle='--')
+    ax.legend(['FEM', 'ECGsim'], loc='upper right')
     ax.set_title(leads[i])
     ax.set_xlabel('Time (ms)')
     ax.set_ylabel('Potential (mV)')
@@ -153,18 +154,18 @@ plotter.view_isometric()
 plotter.add_text("Activation Time", font_size=18, color="black")
 plotter.show()
 
-# plt.plot(u_data[:, activation_dict[80]], label="activation time 8")
-# plt.plot(u_data[:, activation_dict[144]], label="activation time 14.4")
-# plt.plot(u_data[:, activation_dict[145]], label="activation time 14.5")
-# plt.plot(u_data[:, activation_dict[187]], label="activation time 18.7")
-# plt.plot(u_data[:, activation_dict[235]], label="activation time 23.5")
-# plt.plot(u_data[:, activation_dict[349]], label="activation time 34.9")
-# plt.plot(u_data[:, activation_dict[456]], label="activation time 45.6")
-# plt.xlabel("time step")
-# plt.ylabel("u")
-# plt.title("Transmembrane Potential")
-# plt.legend()
-# plt.show()
+plt.plot(u_data[:, activation_dict[80]], label="activation time 8")
+plt.plot(u_data[:, activation_dict[144]], label="activation time 14.4")
+plt.plot(u_data[:, activation_dict[145]], label="activation time 14.5")
+plt.plot(u_data[:, activation_dict[187]], label="activation time 18.7")
+plt.plot(u_data[:, activation_dict[235]], label="activation time 23.5")
+plt.plot(u_data[:, activation_dict[349]], label="activation time 34.9")
+plt.plot(u_data[:, activation_dict[456]], label="activation time 45.6")
+plt.xlabel("time step")
+plt.ylabel("u")
+plt.title("Transmembrane Potential")
+plt.legend()
+plt.show()
 
 # plotter = pyvista.Plotter()
 # grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))

@@ -66,7 +66,7 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
             M.interpolate(rho1, cell_markers.find(4))
     Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
 
-    alpha1 = 1e-1
+    alpha1 = 1e-2
     # phi delta_phi delta_deri_phi
     phi = Function(V2)
     delta_phi = Function(V2)
@@ -152,7 +152,7 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
     cm_cmp_per_iter = []
 
     k = 0
-    total_iter = 1e2
+    total_iter = 2e2
     while (True):
         delta_deri_phi.x.array[:] = delta_deri_tau(phi.x.array, tau)
 
@@ -312,4 +312,4 @@ if __name__ == '__main__':
     # d = np.load('3d/data/d.npy')
     d = np.load('3d/data/u_data_reaction_diffusion.npy')[0]
     v = np.load('3d/data/v_data_reaction_diffusion.npy')[0]
-    resting_ischemia_inversion(mesh_file, d_data=d, v_data=v, plot_flag=True, exact_flag=True, print_message=True)
+    resting_ischemia_inversion(mesh_file, d_data=d, v_data=v, plot_flag=True, exact_flag=True, print_message=True, transmural_flag=True)
