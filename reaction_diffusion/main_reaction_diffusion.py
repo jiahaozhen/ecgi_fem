@@ -81,13 +81,15 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=120, step_per_tim
         # use ecgsim ischemia data
         geom_data_ecgsim = h5py.File('3d/data/geom_ecgsim.mat', 'r')
         v_pts_ecgsim = np.array(geom_data_ecgsim['geom_ventricle']['pts'])
-        file_ecgsim = h5py.File('3d/data/surface_ischemia.mat', 'r')
-        v_data_ecgsim = np.array(file_ecgsim['v'])[0]
-        v_fem_one = scipy.interpolate.griddata(v_pts_ecgsim, v_data_ecgsim, V.tabulate_dof_coordinates(), method='linear', fill_value=0)
-        u_peak.x.array[:] = np.where(v_fem_one > 0.5, u_peak_ischemia_val, 1)
-        u_rest.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val, 0)
-        u_n.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val, 0)
-        uh.x.array[:] = np.where(v_fem_one > 0.5, u_rest_ischemia_val, 0)
+        v_pts_fem = V.tabulate_dof_coordinates()
+        file_ecgsim = h5py.File('3d/data/ischemia_ECGsim_bem.mat', 'r')
+        marker = np.array(file_ecgsim['marker_ischemia']).reshape(-1)
+        rbf = scipy.interpolate.Rbf(v_pts_ecgsim[:,0], v_pts_ecgsim[:,1], v_pts_ecgsim[:,2], marker)
+        marker = rbf(v_pts_fem[:,0], v_pts_fem[:,1], v_pts_fem[:,2])
+        u_peak.x.array[:] = np.where(marker > 0.5, u_peak_ischemia_val, 1)
+        u_rest.x.array[:] = np.where(marker > 0.5, u_rest_ischemia_val, 0)
+        u_n.x.array[:] = np.where(marker > 0.5, u_rest_ischemia_val, 0)
+        uh.x.array[:] = np.where(marker > 0.5, u_rest_ischemia_val, 0)
 
     if isinstance(u_peak, Function):
         ischemia_marker = np.where(u_peak.x.array == u_peak_ischemia_val, 1, 0)
@@ -152,10 +154,8 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=120, step_per_tim
     u_data = np.where(u_data > 1, 1, u_data)
     u_data = np.where(u_data < 0, 0, u_data)
     u_data = u_data * (v_max - v_min) + v_min
-    phi_1 = None
-    phi_2 = None
+    phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
     if data_argument:
-        phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
         u_data = v_data_argument(phi_1, phi_2)
     
     return u_data, phi_1, phi_2
