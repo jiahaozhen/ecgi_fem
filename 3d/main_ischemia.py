@@ -18,8 +18,8 @@ sys.path.append('.')
 from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval_function, find_vertex_with_neighbour_less_than_0
 
 def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
-                                     gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, tau=1, 
-                                     ischemia_potential=-80, normal_potential=-90, 
+                                     gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, tau=10, 
+                                     ischemia_potential=-60, normal_potential=-90, 
                                      multi_flag=True, plot_flag=False, exact_flag=False, print_message=False,
                                      transmural_flag=False):
     # mesh of Body
@@ -285,7 +285,7 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
     marker.x.array[:] = marker_val
 
     marker_exact = Function(V2)
-    marker_exact.x.array[:] = np.where(v_exact.x.array == -80, 1, 0)
+    marker_exact.x.array[:] = np.where(v_exact.x.array == ischemia_potential, 1, 0)
 
     def plot_f_on_subdomain(f, subdomain, title):
         grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
@@ -309,7 +309,6 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
 
 if __name__ == '__main__':
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
-    # d = np.load('3d/data/d.npy')
     d = np.load('3d/data/u_data_reaction_diffusion.npy')[0]
     v = np.load('3d/data/v_data_reaction_diffusion.npy')[0]
     resting_ischemia_inversion(mesh_file, d_data=d, v_data=v, plot_flag=True, exact_flag=True, print_message=True, transmural_flag=True)

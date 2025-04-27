@@ -16,9 +16,9 @@ sys.path.append('.')
 from utils.helper_function import v_data_argument, compute_phi_with_v_timebased, find_vertex_with_coordinate, fspace2mesh
 
 def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=120, step_per_timeframe=10, 
-                                          u_peak_ischemia_val=0.9, u_rest_ischemia_val=0.1,
-                                          submesh_flag=True, ischemia_flag=False, 
-                                          center_ischemia=np.array([89.1, 40.9, -13.3]), radius_ischemia=30,
+                                          u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3,
+                                          submesh_flag=True, ischemia_flag=False, tau=1,
+                                          center_ischemia=np.array([32.1,71.7,15]), radius_ischemia=30,
                                           data_argument=False, v_min=-90, v_max=10,
                                           surface_flag=False):
     if submesh_flag:
@@ -156,7 +156,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=120, step_per_tim
     u_data = u_data * (v_max - v_min) + v_min
     phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
     if data_argument:
-        u_data = v_data_argument(phi_1, phi_2)
+        u_data = v_data_argument(phi_1, phi_2, tau=tau)
     
     return u_data, phi_1, phi_2
 

@@ -9,8 +9,8 @@ from reaction_diffusion.main_reaction_diffusion import compute_v_based_on_reacti
 from utils.helper_function import transfer_bsp_to_standard12lead
 
 mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
-v_data_normal, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=False, T=500)
-v_data_ischemia, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, surface_flag=True, T=500)
+v_data_normal, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=False)
+v_data_ischemia, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True)
 
 d_data_normal = compute_d_from_tmp(mesh_file, v_data=v_data_normal)
 d_data_ischemia = compute_d_from_tmp(mesh_file, v_data=v_data_ischemia)

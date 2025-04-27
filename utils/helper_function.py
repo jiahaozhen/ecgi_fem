@@ -139,11 +139,13 @@ def compute_phi_with_v_timebased(v, function_space, marker_ischemia):
     
         phi_1[timeframe] = np.where(marker_ischemia, -min_no_iso, min_iso)
         phi_2[timeframe] = np.where(marker_activation[timeframe], -min_no_act, min_act)
+        if (phi_1[timeframe] == 0).all():
+            phi_1[timeframe] = 20
         if (phi_2[timeframe] == 0).all():
             if timeframe < np.min(activation_time) + 5:
-                phi_2[timeframe] = 10
+                phi_2[timeframe] = 20
             else:
-                phi_2[timeframe] = -10
+                phi_2[timeframe] = -20
     return phi_1, phi_2
 
 def compute_error(v_exact, phi_result):
@@ -315,7 +317,7 @@ def get_activation_time_from_v(v_data):
     activation_time = np.argmax(v_deriviative, axis=0)
     return activation_time
 
-def v_data_argument(phi_1, phi_2, tau = 1, a1 = -90, a2 = -80, a3 = 10, a4 = 0):
+def v_data_argument(phi_1, phi_2, tau = 10, a1 = -90, a2 = -60, a3 = 10, a4 = -20):
     G_phi_1 = G_tau(phi_1, tau)
     G_phi_2 = G_tau(phi_2, tau)
     v = ((a1 * G_phi_2 + a3 * (1 - G_phi_2)) * G_phi_1 + 

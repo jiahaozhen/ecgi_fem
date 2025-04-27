@@ -31,20 +31,25 @@ gdim = 3
 #     data_argument=True, surface_flag=False
 # )
 mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
-v_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, surface_flag=False, data_argument=True)
+ischemia_flag = True
+data_argument = True
+noise_flag = False
+v_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=ischemia_flag, data_argument=data_argument, tau=10)
 
 # sample data
 # v_data = v_data[::5]
 u_data = forward_tmp(mesh_file, v_data, gdim=gdim)
-u_data += np.random.normal(0, 0.1, u_data.shape)
+if noise_flag:
+    u_data += np.random.normal(0, 0.1, u_data.shape)
 
-if gdim == 2:
-    np.save('2d/data/u_data_reaction_diffusion.npy', u_data)
-    np.save('2d/data/v_data_reaction_diffusion.npy', v_data)
-    np.save('2d/data/phi_1_exact_reaction_diffusion.npy', phi_1)
-    np.save('2d/data/phi_2_exact_reaction_diffusion.npy', phi_2)
-else:
-    np.save('3d/data/u_data_reaction_diffusion.npy', u_data)
-    np.save('3d/data/v_data_reaction_diffusion.npy', v_data)
-    np.save('3d/data/phi_1_exact_reaction_diffusion.npy', phi_1)
-    np.save('3d/data/phi_2_exact_reaction_diffusion.npy', phi_2)
+# save data
+file_name_prefix = '2d/data/' if gdim == 2 else '3d/data/'
+file_name_suffix = '_data_reaction_diffusion'
+file_name_suffix += '_noise' if noise_flag else '_denoise'
+file_name_suffix += '_ischemia' if ischemia_flag else '_normal'
+file_name_suffix += '_data_argument' if data_argument else '_no_data_argument'
+file_name_suffix += '.npy'
+np.save(file_name_prefix + 'u' + file_name_suffix, u_data)
+np.save(file_name_prefix + 'v' + file_name_suffix, v_data)
+np.save(file_name_prefix + 'phi_1' + file_name_suffix, phi_1)
+np.save(file_name_prefix + 'phi_2' + file_name_suffix, phi_2)
