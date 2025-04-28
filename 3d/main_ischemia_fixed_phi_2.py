@@ -4,7 +4,7 @@ from dolfinx import default_scalar_type
 from dolfinx.io import gmshio
 from dolfinx.fem import functionspace, form, Constant, Function, assemble_scalar
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
-from dolfinx.mesh import create_submesh
+from dolfinx.mesh import create_submesh, locate_entities_boundary
 from dolfinx.plot import vtk_mesh
 from ufl import TestFunction, TrialFunction, dot, grad, Measure, derivative, sqrt, inner
 from mpi4py import MPI
@@ -15,12 +15,12 @@ import pyvista
 import multiprocessing
 
 sys.path.append('.')
-from utils.helper_function import G_tau, delta_tau, delta_deri_tau, compute_error_phi, eval_function
+from utils.helper_function import G_tau, delta_tau, delta_deri_tau, compute_error_phi, eval_function, find_vertex_with_neighbour_less_than_0
 
 # if activation zone is known, find ischemia zone
 def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, phi_2_exact, timeframe,
                                gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
-                               a1=-90, a2=-80, a3=10, a4=0, tau=1, 
+                               a1=-90, a2=-60, a3=10, a4=-20, tau=10, 
                                multi_flag=True):
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
@@ -65,7 +65,7 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
             M.interpolate(rho1, cell_markers.find(4))
     Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
 
-    alpha1 = 1e-1
+    alpha1 = 1e-100
     # phi delta_phi delta_deri_phi
     phi_1 = Function(V2)
     G_phi_1 = Function(V2)
@@ -124,7 +124,7 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
 
     # vector direction
     u2 = TestFunction(V2)
-    j_p = (-(a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 
+    j_p = (- (a1 - a2 - a3 + a4) * delta_phi_1 * delta_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_2))) * dx2 
            - (a1 - a2) * delta_deri_phi_1 * G_phi_2 * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 
            - (a1 - a2) * delta_phi_1 * G_phi_2 * dot(grad(w), dot(Mi, grad(u2))) * dx2
            - (a3 - a4) * delta_deri_phi_1 * (1 - G_phi_2) * u2 * dot(grad(w), dot(Mi, grad(phi_1))) * dx2 
@@ -152,14 +152,16 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
     assemble_vector(b_u, linear_form_b_u)
     solver.solve(b_u, u.vector)
     # adjust u
-    adjustment = assemble_scalar(form_c1)/assemble_scalar(form_c2)
+    adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
     u.x.array[:] = u.x.array + adjustment
 
     loss_per_iter = []
     cm_cmp_per_iter = []
 
     k = 0
+    total_iter = 200
     while (True):
+        delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
         delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
 
         # cost function
@@ -186,7 +188,7 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
         print('J_p', np.linalg.norm(J_p.array))
         print('cm_cmp', cm_cmp_per_iter[-1])
         # check if the condition is satisfied
-        if (k > 1e2 or np.linalg.norm(J_p.array) < 1e-1):
+        if (k > total_iter or np.linalg.norm(J_p.array) < 1e-1):
             break
         k = k + 1
 
@@ -201,7 +203,6 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
         while(True):
             # adjust p
             phi_1.x.array[:] = phi_v + alpha * dir_p
-            delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
             # compute u
             G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
             v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +
@@ -219,7 +220,24 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
             loss_cmp = loss_new - (loss + c * alpha * J_p.array.dot(dir_p))
             alpha = gamma * alpha
             step_search = step_search + 1
-            if (step_search > 40 or loss_cmp < 0):
+            if (step_search > 100 or loss_cmp < 0):
+                # for p < 0, make its neighbor smaller
+                neighbour_idx, _ = find_vertex_with_neighbour_less_than_0(subdomain_ventricle, phi_1) 
+                # make them smaller
+                phi_1.x.array[neighbour_idx] = np.where(phi_1.x.array[neighbour_idx] >= 0, 
+                                                        phi_1.x.array[neighbour_idx] - tau / total_iter, 
+                                                        phi_1.x.array[neighbour_idx])
+                # compute u
+                G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
+                v.x.array[:] = ((a1 * G_phi_2.x.array + a3 * (1 - G_phi_2.x.array)) * G_phi_1.x.array +
+                                (a2 * G_phi_2.x.array + a4 * (1 - G_phi_2.x.array)) * (1 - G_phi_1.x.array))
+                with b_u.localForm() as loc_b:
+                    loc_b.set(0)
+                assemble_vector(b_u, linear_form_b_u)
+                solver.solve(b_u, u.vector)
+                # adjust u
+                adjustment = assemble_scalar(form_c1) / assemble_scalar(form_c2)
+                u.x.array[:] = u.x.array + adjustment                
                 break
 
     plt.figure(figsize=(10, 8))
@@ -239,8 +257,24 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
     marker_exact = Function(V2)
     marker_exact.x.array[:] = np.where(phi_1_exact[timeframe] < 0, 1, 0)
     
-    v.x.array[:] = v_data[timeframe]
-    phi_2.x.array[:] = np.where(phi_2_exact[timeframe] < 0, 1, 0)
+    v_exact = Function(V2)
+    v_exact.x.array[:] = v_data[timeframe]
+
+    def plot_f_on_surface(f, title):
+        grid = pyvista.UnstructuredGrid(*vtk_mesh(domain, tdim))
+        f_boundary = eval_function(f, domain.geometry.x)
+        boundary_index = locate_entities_boundary(domain, tdim-3, 
+                                                  lambda x: np.full(x.shape[1], True, dtype=bool))
+        mask = ~np.isin(np.arange(len(f_boundary)), boundary_index)
+        f_boundary[mask] = f_boundary[boundary_index[0]]
+        grid.point_data["f"] = f_boundary
+        grid.set_active_scalars("f")
+        plotter = pyvista.Plotter()
+        plotter.add_mesh(grid, show_edges=True)
+        plotter.add_title(title)
+        plotter.view_yz()
+        plotter.add_axes()
+        plotter.show()
 
     def plot_f_on_subdomain(f, subdomain, title):
         grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
@@ -249,34 +283,40 @@ def ischemia_inversion_with_activation(mesh_file, d_data, v_data, phi_1_exact, p
         plotter = pyvista.Plotter()
         plotter.add_mesh(grid, show_edges=True)
         plotter.add_title(title)
-        plotter.view_xy()
+        plotter.view_yz()
         plotter.add_axes()
         plotter.show()
 
     p1 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker_result, subdomain_ventricle, 'ischemia_result'))
     p2 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker_exact, subdomain_ventricle, 'ischemia_exact'))
-    p3 = multiprocessing.Process(target=plot_f_on_subdomain, args=(v, subdomain_ventricle, 'v_exact'))
-    # p4 = multiprocessing.Process(target=plot_f_on_subdomain, args=(phi_2, subdomain_ventricle, 'phi_2_exact'))
+    p3 = multiprocessing.Process(target=plot_f_on_subdomain, args=(v_exact, subdomain_ventricle, 'v_exact'))
+    p4 = multiprocessing.Process(target=plot_f_on_subdomain, args=(v, subdomain_ventricle, 'v_result'))
+    p5 = multiprocessing.Process(target=plot_f_on_surface, args=(u, 'd_result'))
+    p6 = multiprocessing.Process(target=plot_f_on_surface, args=(d, 'd_exact'))
     p1.start()
     p2.start()
     p3.start()
-    # p4.start()
+    p4.start()
+    p5.start()
+    p6.start()
     p1.join()
     p2.join()
     p3.join()
-    # p4.join()
+    p4.join()
+    p5.join()
+    p6.join()
 
     return phi_1.x.array
 
 if __name__ == '__main__':
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
-    d_file = "3d/data/u_data_reaction_diffusion.npy"
-    v_file = "3d/data/v_data_reaction_diffusion.npy"
-    phi_1_file = "3d/data/phi_1_exact_reaction_diffusion.npy"
-    phi_2_file = "3d/data/phi_2_exact_reaction_diffusion.npy"
+    d_file = "3d/data/u_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
+    v_file = "3d/data/v_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
+    phi_1_file = "3d/data/phi_1_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
+    phi_2_file = "3d/data/phi_2_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
 
     d = np.load(d_file)
     v = np.load(v_file)
     phi_1_exact = np.load(phi_1_file)
     phi_2_exact = np.load(phi_2_file)
-    phi_1 = ischemia_inversion_with_activation(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=100)
+    phi_1 = ischemia_inversion_with_activation(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=800)
