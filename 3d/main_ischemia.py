@@ -18,10 +18,11 @@ sys.path.append('.')
 from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval_function, find_vertex_with_neighbour_less_than_0
 
 def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
-                                     gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, tau=10, 
-                                     ischemia_potential=-60, normal_potential=-90, 
-                                     multi_flag=True, plot_flag=False, exact_flag=False, print_message=False,
-                                     transmural_flag=False):
+                               gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
+                               tau=10, alpha1=1e-2, 
+                               ischemia_potential=-60, normal_potential=-90, 
+                               multi_flag=True, plot_flag=False, 
+                               print_message=False, transmural_flag=False) -> Function:
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
@@ -66,7 +67,6 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
             M.interpolate(rho1, cell_markers.find(4))
     Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
 
-    alpha1 = 1e-2
     # phi delta_phi delta_deri_phi
     phi = Function(V2)
     delta_phi = Function(V2)
@@ -135,9 +135,8 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
     delta_phi.x.array[:] = delta_tau(phi.x.array, tau)
     
     # exact solution
-    if exact_flag == True:
-        v_exact = Function(V2)
-        v_exact.x.array[:] = v_data
+    v_exact = Function(V2)
+    v_exact.x.array[:] = v_data
 
     # get u from p
     with b_u.localForm() as loc_b:
@@ -159,8 +158,7 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
         # cost function
         loss = assemble_scalar(form_loss) + assemble_scalar(form_reg)
         loss_per_iter.append(loss)
-        if exact_flag == True:
-            cm_cmp_per_iter.append(compute_error(v_exact, phi)[0])
+        cm_cmp_per_iter.append(compute_error(v_exact, phi)[0])
 
         # get w from u
         with b_w.localForm() as loc_w:
@@ -180,8 +178,7 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
             print('loss_residual:', assemble_scalar(form_loss))
             print('loss_reg:', assemble_scalar(form_reg))
             print('J_p', np.linalg.norm(J_p.array))
-            if exact_flag == True:
-                print('center of mass error:', compute_error(v_exact, phi)[0])
+            print('center of mass error:', compute_error(v_exact, phi)[0])
         # check if the condition is satisfied
         if (k > total_iter or np.linalg.norm(J_p.array) < 1e-1):
             break
@@ -265,19 +262,19 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
                 break
 
     if plot_flag == False:
-        return phi.x.array
-    np.save('3d/data/phi_result.npy', phi.x.array)
+        return phi
 
-    plt.figure(figsize=(10, 8))
-    plt.subplot(1, 2, 1)
-    plt.plot(loss_per_iter)
-    plt.title('cost functional')
-    plt.xlabel('iteration')
-    plt.subplot(1, 2, 2)
-    plt.plot(cm_cmp_per_iter)
-    plt.title('error in center of mass')
-    plt.xlabel('iteration')
-    plt.show()
+    def plot_loss_and_error():
+        plt.figure(figsize=(10, 8))
+        plt.subplot(1, 2, 1)
+        plt.plot(loss_per_iter)
+        plt.title('cost functional')
+        plt.xlabel('iteration')
+        plt.subplot(1, 2, 2)
+        plt.plot(cm_cmp_per_iter)
+        plt.title('error in center of mass')
+        plt.xlabel('iteration')
+        plt.show()
 
     marker = Function(V2)
     marker_val = np.zeros(sub_node_num)
@@ -294,21 +291,23 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
         plotter = pyvista.Plotter()
         plotter.add_mesh(grid, show_edges=True)
         plotter.add_title(title)
-        plotter.view_xy()
+        plotter.view_yz()
         plotter.add_axes()
         plotter.show()
 
     p1 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker, subdomain_ventricle, 'ischemia_result'))
+    p2 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker_exact, subdomain_ventricle, 'ischemia_exact'))
+    p3 = multiprocessing.Process(target=plot_loss_and_error)
     p1.start()
-    if (exact_flag == True):
-        p2 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker_exact, subdomain_ventricle, 'ischemia_exact'))
-        p2.start()
-        p2.join()
+    p2.start()
+    p3.start()
     p1.join()
+    p2.join()
+    p3.join()
     return phi
 
 if __name__ == '__main__':
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
-    d = np.load('3d/data/u_data_reaction_diffusion.npy')[0]
-    v = np.load('3d/data/v_data_reaction_diffusion.npy')[0]
-    resting_ischemia_inversion(mesh_file, d_data=d, v_data=v, plot_flag=True, exact_flag=True, print_message=True, transmural_flag=True)
+    d = np.load('3d/data/u_data_reaction_diffusion_ischemia_data_argument_denoise.npy')[0]
+    v = np.load('3d/data/v_data_reaction_diffusion_ischemia_data_argument.npy')[0]
+    resting_ischemia_inversion(mesh_file, d_data=d, v_data=v, plot_flag=True, print_message=True, transmural_flag=True)

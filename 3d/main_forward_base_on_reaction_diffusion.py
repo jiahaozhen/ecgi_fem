@@ -33,23 +33,29 @@ gdim = 3
 mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
 ischemia_flag = True
 data_argument = True
-noise_flag = False
-v_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=ischemia_flag, data_argument=data_argument, tau=10)
+v_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(mesh_file, tau=10,
+                                                             ischemia_flag=ischemia_flag, 
+                                                             data_argument=data_argument)
 
 # sample data
-# v_data = v_data[::5]
 u_data = forward_tmp(mesh_file, v_data, gdim=gdim)
-if noise_flag:
-    u_data += np.random.normal(0, 0.1, u_data.shape)
 
 # save data
 file_name_prefix = '2d/data/' if gdim == 2 else '3d/data/'
 file_name_suffix = '_data_reaction_diffusion'
-file_name_suffix += '_noise' if noise_flag else '_denoise'
-file_name_suffix += '_ischemia' if ischemia_flag else '_normal'
-file_name_suffix += '_data_argument' if data_argument else '_no_data_argument'
-file_name_suffix += '.npy'
-np.save(file_name_prefix + 'u' + file_name_suffix, u_data)
-np.save(file_name_prefix + 'v' + file_name_suffix, v_data)
-np.save(file_name_prefix + 'phi_1' + file_name_suffix, phi_1)
-np.save(file_name_prefix + 'phi_2' + file_name_suffix, phi_2)
+
+u_file_name = (file_name_prefix + 'u' + file_name_suffix
+               + ('_ischemia' if ischemia_flag else '_normal')
+               + ('_data_argument' if data_argument else '_no_data_argument') + '.npy')
+v_file_name = (file_name_prefix + 'v' + file_name_suffix 
+               + ('_ischemia' if ischemia_flag else '_normal')
+               + ('_data_argument' if data_argument else '_no_data_argument') + '.npy')
+phi_1_file_name = (file_name_prefix + 'phi_1' + file_name_suffix 
+                   + ('_ischemia' if ischemia_flag else '_normal') + '.npy')
+phi_2_file_name = (file_name_prefix + 'phi_2' + file_name_suffix 
+                   + ('_ischemia' if ischemia_flag else '_normal') + '.npy')
+
+np.save(u_file_name, u_data)
+np.save(v_file_name, v_data)
+np.save(phi_1_file_name, phi_1)
+np.save(phi_2_file_name, phi_2)

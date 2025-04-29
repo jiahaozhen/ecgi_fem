@@ -20,12 +20,10 @@ sys.path.append('.')
 from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function, compute_error_phi, find_vertex_with_neighbour_less_than_0
 
 def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3, alpha4,
-                       phi_1_exact = np.load('3d/data/phi_1_exact_reaction_diffusion.npy'), 
-                       phi_2_exact = np.load('3d/data/phi_2_exact_reaction_diffusion.npy'), 
+                       phi_1_exact, phi_2_exact, 
                        gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
-                       a1=-90, a2=-80, a3=10, a4=0,
+                       a1=-90, a2=-60, a3=10, a4=-20,
                        plot_flag=False, print_message=False):
-
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
@@ -526,12 +524,20 @@ if __name__ == '__main__':
         mesh_file = '2d/data/heart_torso.msh'
         v_exact_data_file = '2d/data/v_data_reaction_diffusion.npy'
         d_data_file = '2d/data/u_data_reaction_diffusion.npy'
+        phi_1_file = "2d/data/phi_1_exact_reaction_diffusion.npy"
+        phi_2_file = "2d/data/phi_2_exact_reaction_diffusion.npy"
     else:
         mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
-        v_exact_data_file = '3d/data/v_data_reaction_diffusion.npy'
-        d_data_file = '3d/data/u_data_reaction_diffusion.npy'
+        v_exact_data_file = '3d/data/v_data_reaction_diffusion_denoise_ischemia_data_argument.npy'
+        d_data_file = '3d/data/u_data_reaction_diffusion_denoise_ischemia_data_argument.npy'
+        phi_1_file = "3d/data/phi_1_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
+        phi_2_file = "3d/data/phi_2_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
     v_exact = np.load(v_exact_data_file)
     d_data = np.load(d_data_file)
-    phi_1, phi_2, v_result = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_exact=v_exact, gdim=3, 
-                                                tau=1, alpha1=1e0, alpha2=1e5, alpha3=1e2, alpha4=1e-1,
+    phi_1_exact = np.load(phi_1_file)
+    phi_2_exact = np.load(phi_2_file)
+    phi_1, phi_2, v_result = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_exact=v_exact, 
+                                                phi_1_exact=phi_1_exact, phi_2_exact=phi_2_exact,
+                                                gdim=3, tau=10, 
+                                                alpha1=1e0, alpha2=1e5, alpha3=1e2, alpha4=1e-1,
                                                 plot_flag=True, print_message=True)

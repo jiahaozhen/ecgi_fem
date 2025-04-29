@@ -277,7 +277,7 @@ def eval_function(u: Function, points: np.ndarray):
     u_values = u.eval(points_on_proc, cells)
     return u_values
 
-def compute_error_and_correlation(result, ref):
+def compute_error_and_correlation(result: np.ndarray, ref: np.ndarray):
     assert len(result) == len(ref)
     relative_error = 0
     correlation_coefficient = 0
@@ -290,7 +290,7 @@ def compute_error_and_correlation(result, ref):
     correlation_coefficient = correlation_coefficient/len(result)
     return relative_error, correlation_coefficient
 
-def assign_function(f, idx, val):
+def assign_function(f: Function, idx: np.ndarray, val: np.ndarray):
     '''idx means the value's order in domain.geometry.x'''
     assert len(val) == len(f.x.array)
     assert len(idx) == len(val)
@@ -298,7 +298,7 @@ def assign_function(f, idx, val):
     mesh2functionspace = np.argsort(functionspace2mesh)
     f.x.array[mesh2functionspace[idx]] = val
 
-def fspace2mesh(V):
+def fspace2mesh(V: functionspace):
     fspace_cell2point = V.dofmap.list
     subdomain_cell2point = V.mesh.geometry.dofmap
 
@@ -311,20 +311,20 @@ def fspace2mesh(V):
                 fspace2mesh[idx_fspace] = idx_submesh
     return fspace2mesh
 
-def get_activation_time_from_v(v_data):
+def get_activation_time_from_v(v_data: np.ndarray):
     v_deriviative = np.diff(v_data, axis=0)
     # find the time where the v_deriviative is biggest
     activation_time = np.argmax(v_deriviative, axis=0)
     return activation_time
 
-def v_data_argument(phi_1, phi_2, tau = 10, a1 = -90, a2 = -60, a3 = 10, a4 = -20):
+def v_data_argument(phi_1: np.ndarray, phi_2: np.ndarray, tau = 10, a1 = -90, a2 = -60, a3 = 10, a4 = -20):
     G_phi_1 = G_tau(phi_1, tau)
     G_phi_2 = G_tau(phi_2, tau)
     v = ((a1 * G_phi_2 + a3 * (1 - G_phi_2)) * G_phi_1 + 
          (a2 * G_phi_2 + a4 * (1 - G_phi_2)) * (1 - G_phi_1))
     return v
 
-def compute_error_phi(phi_exact, phi_result, function_space):
+def compute_error_phi(phi_exact: np.ndarray, phi_result: np.ndarray, function_space: functionspace):
     marker_exact = np.where(phi_exact < 0, 1, 0)
     marker_result = np.where(phi_result < 0, 1, 0)
     coordinates = function_space.tabulate_dof_coordinates()
@@ -410,3 +410,36 @@ def transfer_bsp_to_standard12lead(bsp_data: np.ndarray, lead_index: np.ndarray)
     standard12Lead[:, 11] = bsp_data[:, lead_index[8]] - np.mean(bsp_data[:, lead_index[6:8]], axis=1)
     
     return standard12Lead
+
+def add_noise_based_on_snr(data: np.ndarray, snr: float) -> np.ndarray:
+    """
+    Add noise to the data based on the specified SNR (Signal-to-Noise Ratio).
+    
+    Parameters:
+    - data: The original data to which noise will be added.
+    - snr: The desired SNR in decibels (dB).
+    
+    Returns:
+    - Noisy data with the specified SNR.
+    """
+    signal_power = np.mean(data**2)
+    noise_power = signal_power / (10**(snr / 10))
+    noise = np.random.normal(0, np.sqrt(noise_power), data.shape)
+    noisy_data = data + noise
+    return noisy_data
+
+def check_noise_level_snr(data: np.ndarray, noise: np.ndarray) -> float:
+    """
+    Check the SNR (Signal-to-Noise Ratio) of the data.
+    
+    Parameters:
+    - data: The original data.
+    - noise: The noise added to the data.
+    
+    Returns:
+    - SNR in decibels (dB).
+    """
+    signal_power = np.mean(data**2)
+    noise_power = np.mean(noise**2)
+    snr = 10 * np.log10(signal_power / noise_power)
+    return snr
