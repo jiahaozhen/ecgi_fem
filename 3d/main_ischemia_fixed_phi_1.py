@@ -65,7 +65,7 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
             M.interpolate(rho1, cell_markers.find(4))
     Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
 
-    alpha1 = 1e-100
+    alpha1 = 1e-2
     alpha2 = 1e1
     # phi delta_phi delta_deri_phi
     phi_1 = Function(V2)
@@ -144,12 +144,13 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
     Reg_q = create_vector(form_Reg_q)
 
     # initial phi
-    phi_1.x.array[:] = np.where(phi_1_exact[timeframe-1] < 0, -tau/2, tau/2)
+    # phi_1.x.array[:] = np.where(phi_1_exact[timeframe-1] < 0, -tau/2, tau/2)
+    phi_1.x.array[:] = phi_1_exact[timeframe]
     G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
     delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
     delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
 
-    phi_0 = np.full(phi_2.x.array.shape, -tau / 2)
+    phi_0 = np.full(phi_2.x.array.shape, tau/2)
     # phi_0 = np.where(phi_2_exact[timeframe-1] < 0, -tau/2, tau/2)
     # phi_0 = phi_2_exact[timeframe]
     phi_2.x.array[:] = phi_0
@@ -329,13 +330,13 @@ def activation_inversion_with_ischemia(mesh_file, d_data, v_data, phi_1_exact, p
 
 if __name__ == '__main__':
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
-    d_file = "3d/data/u_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
-    v_file = "3d/data/v_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
-    phi_1_file = "3d/data/phi_1_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
-    phi_2_file = "3d/data/phi_2_data_reaction_diffusion_denoise_ischemia_data_argument.npy"
+    d_file = "3d/data/u_data_reaction_diffusion_ischemia_data_argument.npy"
+    v_file = "3d/data/v_data_reaction_diffusion_ischemia_data_argument.npy"
+    phi_1_file = "3d/data/phi_1_data_reaction_diffusion_ischemia.npy"
+    phi_2_file = "3d/data/phi_2_data_reaction_diffusion_ischemia.npy"
 
     d = np.load(d_file)
     v = np.load(v_file)
     phi_1_exact = np.load(phi_1_file)
     phi_2_exact = np.load(phi_2_file)
-    phi_2 = activation_inversion_with_ischemia(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=700)
+    phi_2 = activation_inversion_with_ischemia(mesh_file, d, v, phi_1_exact, phi_2_exact, timeframe=100)

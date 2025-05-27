@@ -262,7 +262,7 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
                 break
 
     if plot_flag == False:
-        return phi
+        return phi, assemble_scalar(form_loss), assemble_scalar(form_reg)
 
     def plot_loss_and_error():
         plt.figure(figsize=(10, 8))
@@ -304,7 +304,7 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
     p1.join()
     p2.join()
     p3.join()
-    return phi
+    return phi, assemble_scalar(form_loss), assemble_scalar(form_reg)
 
 if __name__ == '__main__':
     mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"

@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import multiprocessing
 
 sys.path.append('.')
-from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function, compute_error_phi, find_vertex_with_neighbour_less_than_0
+from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function, compute_error_phi, find_vertex_with_neighbour_less_than_0, v_data_argument
 
 def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
                        phi_1_exact, phi_2_exact, tau=10, 
@@ -92,10 +92,11 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
 
     # vector b_u
     dx2 = Measure("dx",domain=subdomain_ventricle)
-    b_u_element = - (a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(v1), dot(Mi, grad(phi_1))) * dx2 \
-                  - (a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(v1), dot(Mi, grad(phi_2))) * dx2 \
-                  - (a3 - a4) * delta_phi_1 * dot(grad(v1), dot(Mi, grad(phi_1))) * dx2 \
-                  - (a2 - a4) * delta_phi_2 * dot(grad(v1), dot(Mi, grad(phi_2))) * dx2
+    b_u_element = -dot(grad(v1), dot(Mi, grad(v))) * dx2
+    # b_u_element = - (a1 - a2 - a3 + a4) * delta_phi_1 * G_phi_2 * dot(grad(v1), dot(Mi, grad(phi_1))) * dx2 \
+    #               - (a1 - a2 - a3 + a4) * delta_phi_2 * G_phi_1 * dot(grad(v1), dot(Mi, grad(phi_2))) * dx2 \
+    #               - (a3 - a4) * delta_phi_1 * dot(grad(v1), dot(Mi, grad(phi_1))) * dx2 \
+    #               - (a2 - a4) * delta_phi_2 * dot(grad(v1), dot(Mi, grad(phi_2))) * dx2
     entity_map = {domain._cpp_object: ventricle_to_torso}
     linear_form_b_u = form(b_u_element, entity_maps=entity_map)
     b_u = create_vector(linear_form_b_u)
@@ -134,7 +135,9 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
 
     phi_2_result = phi_2_exact.copy()
 
-    phi_1.x.array[:] = np.full(phi_1.x.array.shape, tau/2)
+    # phi_1.x.array[:] = np.full(phi_1.x.array.shape, tau/2)
+    # phi_1.x.array[:] = phi_1_exact[0]
+    phi_1.x.array[:] = np.load("3d/data/tmp_phi_1.npy")
     G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
     delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
     delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
@@ -154,6 +157,7 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
             G_phi_2.x.array[:] = G_tau(phi_2.x.array, tau)
             delta_phi_2.x.array[:] = delta_tau(phi_2.x.array, tau)
             # get u from p, q
+            v.x.array[:] = v_data_argument(phi_1.x.array, phi_2.x.array)
             with b_u.localForm() as loc_b:
                 loc_b.set(0)
             assemble_vector(b_u, linear_form_b_u)
@@ -208,7 +212,7 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
             loss_reg = loss_reg + assemble_scalar(form_reg)
         return loss_residual, loss_reg
     
-    total_iter = 200
+    total_iter = 100
     loss_per_iter = []
     cm_per_iter = []
     k = 0
@@ -260,11 +264,11 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
                                                         phi_1.x.array[neighbour_idx] - tau / total_iter, 
                                                         phi_1.x.array[neighbour_idx])
                 # compute u
-                u_array = compute_u_from_phi_1(phi_1)             
+                u_array = compute_u_from_phi_1(phi_1)
                 break
     
     if plot_flag == False:
-        return phi_1
+        return phi_1, compute_loss_from_phi_1(phi_1, u_array)[0], compute_loss_from_phi_1(phi_1, u_array)[1]
 
     def plot_loss_and_error():
         plt.figure(figsize=(10, 8))
@@ -318,9 +322,10 @@ if __name__ == '__main__':
     d_data = np.load(d_data_file)
     phi_1_exact = np.load(phi_1_file)
     phi_2_exact = np.load(phi_2_file)
-    time_sequence = np.arange(600, 601, 1)
+    time_sequence = np.arange(0, 1200, 10)
     phi_1 = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_data=v_data, 
                                phi_1_exact=phi_1_exact, phi_2_exact=phi_2_exact,
                                time_sequence=time_sequence,
                                gdim=3, tau=10, alpha1=1e-100,
                                plot_flag=True, print_message=True)
+    np.save('3d/data/tmp_phi_1.npy', phi_1.x.array)

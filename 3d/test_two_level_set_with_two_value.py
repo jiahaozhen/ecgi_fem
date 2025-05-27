@@ -291,10 +291,10 @@ def ischemia_inversion(mesh_file, d_data, v_exact, tau, alpha1, alpha2, alpha3,
 if __name__ == '__main__':
     gdim = 3
     mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
-    v_exact_data_file = '3d/data/v_data_reaction_diffusion_denoise_normal_data_argument.npy'
-    d_data_file = '3d/data/u_data_reaction_diffusion_denoise_normal_data_argument.npy'
-    v_exact = np.load(v_exact_data_file)[200]
-    d_data = np.load(d_data_file)[200]
+    v_exact_data_file = '3d/data/v_data_reaction_diffusion_ischemia_data_argument.npy'
+    d_data_file = '3d/data/u_data_reaction_diffusion_ischemia_data_argument.npy'
+    v_exact = np.load(v_exact_data_file)[800]
+    d_data = np.load(d_data_file)[800]
     phi_1, phi_2, v_result = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_exact=v_exact, gdim=3, 
                                                 tau=10, alpha1=1e0, alpha2=1e0, alpha3=5e-20, 
                                                 plot_flag=True, print_message=True)
