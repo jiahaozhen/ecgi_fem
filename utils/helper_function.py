@@ -194,7 +194,7 @@ def compute_error(v_exact, phi_result):
 
     return (cm, hd, SN, SP)
 
-# function to comppare exact phi and result phi
+# function to compare exact phi and result phi
 def compare_phi_one_timeframe(phi_exact, phi_result, coordinates = []):
     marker_exact = np.where(phi_exact < 0, 1, 0)
     marker_result = np.where(phi_result < 0, 1, 0)
@@ -443,3 +443,31 @@ def check_noise_level_snr(data: np.ndarray, noise: np.ndarray) -> float:
     noise_power = np.mean(noise**2)
     snr = 10 * np.log10(signal_power / noise_power)
     return snr
+
+def compute_phi_with_activation(activation_f : Function, duration : int):
+    phi = np.zeros((duration, len(activation_f.x.array)))
+    activation_time = activation_f.x.array
+    marker_activation = np.full_like(phi, False, dtype=bool)
+    for i in range(phi.shape[1]):
+        marker_activation[int(activation_time[i]):, i] = True
+    coordinates = activation_f.function_space.tabulate_dof_coordinates()
+    
+    def min_distance(coords, mask):
+        if np.any(mask):
+            return np.min(np.linalg.norm(coords[:, None, :] - coords[mask], axis=2), axis=1)
+        else:
+            return np.zeros(len(coords))
+    
+    for timeframe in range(duration):
+        
+        min_act = min_distance(coordinates, marker_activation[timeframe])
+        min_no_act = min_distance(coordinates, ~marker_activation[timeframe])
+    
+        phi[timeframe] = np.where(marker_activation[timeframe], -min_no_act, min_act)
+        if (phi[timeframe] == 0).all():
+            if timeframe < np.min(activation_time) + 5:
+                phi[timeframe] = 20
+            else:
+                phi[timeframe] = -20
+    
+    return phi

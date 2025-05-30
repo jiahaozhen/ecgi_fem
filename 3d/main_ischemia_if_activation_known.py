@@ -19,10 +19,11 @@ sys.path.append('.')
 from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function, compute_error_phi, find_vertex_with_neighbour_less_than_0, v_data_argument
 
 def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
-                       phi_1_exact, phi_2_exact, tau=10, 
-                       gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
-                       a1=-90, a2=-60, a3=10, a4=-20,
-                       plot_flag=False, print_message=False) -> Function:
+                       phi_1_exact, phi_2_exact, phi_initial=None,
+                       tau=10, gdim=3, total_iter=200,
+                       sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
+                       a1=-90, a2=-60, a3=10, a4=-20, 
+                       plot_flag=False, print_message=False, transmural_flag=False) -> Function:
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
@@ -137,7 +138,10 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
 
     # phi_1.x.array[:] = np.full(phi_1.x.array.shape, tau/2)
     # phi_1.x.array[:] = phi_1_exact[0]
-    phi_1.x.array[:] = np.load("3d/data/tmp_phi_1.npy")
+    # phi_1.x.array[:] = np.load("3d/data/tmp_phi_1.npy")
+    if phi_initial is None:
+        phi_initial = np.full(phi_1.x.array.shape, tau / 2)
+    phi_1.x.array[:] = phi_initial
     G_phi_1.x.array[:] = G_tau(phi_1.x.array, tau)
     delta_phi_1.x.array[:] = delta_tau(phi_1.x.array, tau)
     delta_deri_phi_1.x.array[:] = delta_deri_tau(phi_1.x.array, tau)
@@ -212,7 +216,6 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
             loss_reg = loss_reg + assemble_scalar(form_reg)
         return loss_residual, loss_reg
     
-    total_iter = 100
     loss_per_iter = []
     cm_per_iter = []
     k = 0
@@ -257,18 +260,20 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
             alpha = gamma * alpha
             step_search = step_search + 1
             if (step_search > 1e2 or loss_cmp < 0):
-                # for p < 0, make its neighbor smaller
-                neighbour_idx, _ = find_vertex_with_neighbour_less_than_0(subdomain_ventricle, phi_1) 
-                # make them smaller
-                phi_1.x.array[neighbour_idx] = np.where(phi_1.x.array[neighbour_idx] >= 0, 
-                                                        phi_1.x.array[neighbour_idx] - tau / total_iter, 
-                                                        phi_1.x.array[neighbour_idx])
-                # compute u
-                u_array = compute_u_from_phi_1(phi_1)
+                if transmural_flag:
+                    # for p < 0, make its neighbor smaller
+                    neighbour_idx, _ = find_vertex_with_neighbour_less_than_0(subdomain_ventricle, phi_1) 
+                    # make them smaller
+                    phi_1.x.array[neighbour_idx] = np.where(phi_1.x.array[neighbour_idx] >= 0, 
+                                                            phi_1.x.array[neighbour_idx] - tau / total_iter, 
+                                                            phi_1.x.array[neighbour_idx])
+                    # compute u
+                    u_array = compute_u_from_phi_1(phi_1)
                 break
     
     if plot_flag == False:
-        return phi_1, compute_loss_from_phi_1(phi_1, u_array)[0], compute_loss_from_phi_1(phi_1, u_array)[1]
+        return phi_1
+        # return phi_1, compute_loss_from_phi_1(phi_1, u_array)[0], compute_loss_from_phi_1(phi_1, u_array)[1]
 
     def plot_loss_and_error():
         plt.figure(figsize=(10, 8))
@@ -309,6 +314,7 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
     p2.join()
     p3.join()
 
+    # return phi_1, compute_loss_from_phi_1(phi_1, u_array)[0], compute_loss_from_phi_1(phi_1, u_array)[1]
     return phi_1
 
 
@@ -325,7 +331,8 @@ if __name__ == '__main__':
     time_sequence = np.arange(0, 1200, 10)
     phi_1 = ischemia_inversion(mesh_file=mesh_file, d_data=d_data, v_data=v_data, 
                                phi_1_exact=phi_1_exact, phi_2_exact=phi_2_exact,
+                               phi_initial=None,
                                time_sequence=time_sequence,
                                gdim=3, tau=10, alpha1=1e-100,
                                plot_flag=True, print_message=True)
-    np.save('3d/data/tmp_phi_1.npy', phi_1.x.array)
+    # np.save('3d/data/tmp_phi_1.npy', phi_1.x.array)
