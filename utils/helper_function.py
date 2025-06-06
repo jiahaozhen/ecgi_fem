@@ -2,7 +2,9 @@ from ufl import grad
 from dolfinx.mesh import locate_entities_boundary, meshtags, exterior_facet_indices, create_submesh, Mesh
 from dolfinx.geometry import bb_tree, compute_collisions_points, compute_colliding_cells
 from dolfinx.fem import functionspace, Function, Expression
+from dolfinx.io import gmshio
 from .normals_and_tangents import facet_vector_approximation
+from mpi4py import MPI
 import numpy as np
 import h5py
 import scipy.interpolate
@@ -471,3 +473,42 @@ def compute_phi_with_activation(activation_f : Function, duration : int):
                 phi[timeframe] = -20
     
     return phi
+
+def extract_data_from_mesh(mesh_file: str, points: np.ndarray, origin_data: np.ndarray) -> np.ndarray:
+    domain, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
+    V = functionspace(domain, ("Lagrange", 1))
+    f = Function(V)
+    extracted_data = []
+    total_num = len(origin_data)
+    for i in range(total_num):
+        f.x.array[:] = origin_data[i]
+        extracted_data_t = eval_function(f, points).squeeze()
+        extracted_data.append(extracted_data_t.copy())
+    return np.array(extracted_data)
+
+def extract_data_from_mesh1_to_mesh2(mesh_file1: str, mesh_file2: str, origin_data: np.ndarray) -> np.ndarray:
+    domain2, _, _ = gmshio.read_from_msh(mesh_file2, MPI.COMM_WORLD, gdim=3)
+    V2 = functionspace(domain2, ("Lagrange", 1))
+    points = V2.tabulate_dof_coordinates()
+    extract_data = extract_data_from_mesh(mesh_file1, points, origin_data)
+    return extract_data
+
+def extract_data_from_submesh1_to_submesh2(mesh_file1: str, mesh_file2: str, origin_data: np.ndarray) -> np.ndarray:
+    domain1, cell_markers_1, _ = gmshio.read_from_msh(mesh_file1, MPI.COMM_WORLD, gdim=3)
+    domain2, cell_markers_2, _ = gmshio.read_from_msh(mesh_file2, MPI.COMM_WORLD, gdim=3)
+    
+    subdomain1, _, _, _ = create_submesh(domain1, domain1.topology.dim, cell_markers_1.find(2))
+    subdomain2, _, _, _ = create_submesh(domain2, domain2.topology.dim, cell_markers_2.find(2))
+
+    V1 = functionspace(subdomain1, ("Lagrange", 1))
+    V2 = functionspace(subdomain2, ("Lagrange", 1))
+
+    points = V2.tabulate_dof_coordinates()
+    f = Function(V1)
+    extracted_data = []
+    total_num = len(origin_data)
+    for i in range(total_num):
+        f.x.array[:] = origin_data[i]
+        extracted_data_t = eval_function(f, points).squeeze()
+        extracted_data.append(extracted_data_t.copy())    
+    return extracted_data
