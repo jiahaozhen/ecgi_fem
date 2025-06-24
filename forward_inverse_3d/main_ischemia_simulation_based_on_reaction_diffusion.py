@@ -8,7 +8,7 @@ sys.path.append('.')
 from reaction_diffusion.main_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from utils.helper_function import transfer_bsp_to_standard12lead
 
-mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
+mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
 v_data_normal, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=False)
 v_data_ischemia, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True)
 

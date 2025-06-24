@@ -143,7 +143,7 @@ def extract_d_from_u(mesh_file, points, u_data):
 def compute_d_from_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_flag=True):
     # v_data = np.load(v_file)
     u_data = forward_tmp(mesh_file, v_data, sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t, multi_flag=multi_flag)
-    geom = h5py.File('3d/data/geom_ecgsim.mat', 'r')
+    geom = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
     points = np.array(geom['geom_thorax']['pts'])
     d_data = extract_d_from_u(mesh_file, points, u_data)
     return d_data

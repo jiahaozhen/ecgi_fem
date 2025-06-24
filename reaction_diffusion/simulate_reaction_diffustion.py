@@ -1,7 +1,8 @@
 import sys
 
 from dolfinx.io import gmshio
-from dolfinx.mesh import create_submesh
+from dolfinx.plot import vtk_mesh
+from dolfinx.mesh import create_submesh, locate_entities_boundary
 from dolfinx.fem import functionspace, Function, form
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector
 from ufl import TrialFunction, TestFunction, dot, grad, Measure
@@ -11,25 +12,25 @@ import h5py
 import matplotlib.pyplot as plt
 import scipy.interpolate
 import numpy as np
+import pyvista
 
 sys.path.append('.')
-from utils.helper_function import v_data_argument, compute_phi_with_v_timebased, find_vertex_with_coordinate, fspace2mesh
+from utils.helper_function import distinguish_epi_endo, eval_function, v_data_argument, compute_phi_with_v_timebased, find_vertex_with_coordinate, fspace2mesh, assign_function
 
-def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=120, step_per_timeframe=10, 
-                                          u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3,
-                                          submesh_flag=True, ischemia_flag=False, tau=1,
-                                          center_ischemia=np.array([32.1,71.7,15]), radius_ischemia=30,
-                                          data_argument=False, v_min=-90, v_max=10,
-                                          surface_flag=False):
-    if submesh_flag:
-        # mesh of Body
-        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
-        tdim = domain.topology.dim
-        # mesh of Heart
-        subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
-    else:
-        subdomain_ventricle, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
-    
+def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
+                                          ischemia_flag=True, ischemia_epi_endo=[-1, 0, 1],
+                                          center_ischemia=np.array([32.1, 71.7, 15]), radius_ischemia=30,
+                                          T=120, step_per_timeframe=10,
+                                          u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3, tau=10,
+                                          data_argument=False, v_min=-90, v_max=10):
+    # mesh of Body
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    tdim = domain.topology.dim
+    # mesh of Heart
+    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+    # 0 is mid-myocardial, 1 is epicardium, -1 is endocardium
+    epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
+
     t = 0
     num_steps = T * step_per_timeframe
     dt = T / num_steps  # time step size
@@ -42,6 +43,13 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=120, step_per_tim
     u_crit = 0.13
 
     V = functionspace(subdomain_ventricle, ("Lagrange", 1))
+    functionspace2mesh = fspace2mesh(V)
+    mesh2functionspace = np.argsort(functionspace2mesh)
+
+    marker_function = Function(V)
+    marker_function.x.array[:] = mesh2functionspace[epi_endo_marker]
+    assign_function(marker_function, np.arange(len(subdomain_ventricle.geometry.x)), epi_endo_marker)
+
     class ischemia_condition():
         def __init__(self, u_ischemia, u_healthy, center=center_ischemia, r=radius_ischemia):
             self.u_ischemia = u_ischemia
@@ -50,14 +58,23 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=120, step_per_tim
             self.r = r
         def __call__(self, x):
             if gdim == 3:
-                return np.where((x[0]-self.center[0])**2 + 
-                                (x[1]-self.center[1])**2 +
-                                (x[2]-self.center[2])**2 < self.r**2, 
-                                self.u_ischemia, self.u_healthy)
+                distance_value = (x[0]-self.center[0])**2 + (x[1]-self.center[1])**2 + (x[2]-self.center[2])**2 - self.r**2
             else:
-                return np.where((x[0]-self.center[0])**2 + 
-                                (x[1]-self.center[1])**2 < self.r**2, 
-                                self.u_ischemia, self.u_healthy)
+                distance_value = (x[0]-self.center[0])**2 + (x[1]-self.center[1])**2 - self.r**2
+            
+            marker_value = eval_function(marker_function, x.transpose()).squeeze()
+            ret_value = np.full(x.shape[1], self.u_healthy, dtype=np.float64)
+            if 0 in ischemia_epi_endo:
+                condition = np.where(np.abs(marker_value-0) < 1e-3, distance_value < 0, False)
+                ret_value[condition] = self.u_ischemia
+            if 1 in ischemia_epi_endo:
+                condition = np.where(np.abs(marker_value-1) < 1e-3, distance_value < 0, False)
+                ret_value[condition] = self.u_ischemia
+            if -1 in ischemia_epi_endo:
+                condition = np.where(np.abs(marker_value+1) < 1e-3, distance_value < 0, False)
+                ret_value[condition] = self.u_ischemia
+            return ret_value
+    
     u_peak = Function(V)
     u_rest = Function(V)
     u_n = Function(V)
@@ -77,25 +94,11 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=120, step_per_tim
 
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
 
-    if surface_flag and ischemia_flag:
-        # use ecgsim ischemia data
-        geom_data_ecgsim = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
-        v_pts_ecgsim = np.array(geom_data_ecgsim['geom_ventricle']['pts'])
-        v_pts_fem = V.tabulate_dof_coordinates()
-        file_ecgsim = h5py.File(r'forward_inverse_3d/data/ischemia_ECGsim_bem.mat', 'r')
-        marker = np.array(file_ecgsim['marker_ischemia']).reshape(-1)
-        rbf = scipy.interpolate.Rbf(v_pts_ecgsim[:,0], v_pts_ecgsim[:,1], v_pts_ecgsim[:,2], marker)
-        marker = rbf(v_pts_fem[:,0], v_pts_fem[:,1], v_pts_fem[:,2])
-        u_peak.x.array[:] = np.where(marker > 0.5, u_peak_ischemia_val, 1)
-        u_rest.x.array[:] = np.where(marker > 0.5, u_rest_ischemia_val, 0)
-        u_n.x.array[:] = np.where(marker > 0.5, u_rest_ischemia_val, 0)
-        uh.x.array[:] = np.where(marker > 0.5, u_rest_ischemia_val, 0)
-
     if isinstance(u_peak, Function):
-        ischemia_marker = np.where(u_peak.x.array == u_peak_ischemia_val, 1, 0)
+        ischemia_marker = np.where(np.abs(u_peak.x.array - u_peak_ischemia_val) < 1e-3, 1, 0)
     else:
         ischemia_marker = np.full(u_n.x.array.shape, 0)
-
+    
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)
     a_u = u * v * dx1 + dt * D * dot(grad(u), grad(v)) * dx1
@@ -162,4 +165,4 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=120, step_per_tim
 
 if __name__ == "__main__":
     mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
-    u_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True)
+    compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, T=10)
