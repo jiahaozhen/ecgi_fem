@@ -9,8 +9,8 @@ from forward_inverse_3d.main_forward_tmp import compute_d_from_tmp
 from utils.helper_function import transfer_bsp_to_standard12lead
 
 mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
-v_data_epi_endo, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, ischemia_epi_endo=[-1, 0, 1], T=60)
-v_data_epi, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, ischemia_epi_endo=[1], T=60)
+v_data_epi_endo, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, ischemia_epi_endo=[-1, 0, 1], T=120)
+v_data_epi, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, ischemia_epi_endo=[-1, 1], T=120)
 
 
 d_data_epi_endo = compute_d_from_tmp(mesh_file, v_data=v_data_epi_endo)
