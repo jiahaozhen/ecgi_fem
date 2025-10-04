@@ -23,12 +23,17 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           T=120, step_per_timeframe=10,
                                           u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3, tau=10,
                                           data_argument=False, v_min=-90, v_max=10):
+    '''
+    diff between compute_v_based_on_reaction_diffusion in main_reaction_diffusion_on_ventricle.py:
+    1. add ischemia_epi_endo to choose which layer to set ischemia
+    2. activation is fixed
+    '''
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
     # mesh of Heart
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
-    # 0 is mid-myocardial, 1 is epicardium, -1 is endocardium
+    # 1 is epicardium, 0 is mid-myocardial, -1 is endocardium
     epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
 
     t = 0
@@ -47,7 +52,6 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     mesh2functionspace = np.argsort(functionspace2mesh)
 
     marker_function = Function(V)
-    marker_function.x.array[:] = mesh2functionspace[epi_endo_marker]
     assign_function(marker_function, np.arange(len(subdomain_ventricle.geometry.x)), epi_endo_marker)
 
     class ischemia_condition():
@@ -127,9 +131,6 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     }
     activation_dict = {k : find_vertex_with_coordinate(subdomain_ventricle, v) for k, v in activation_dict.items()}
 
-    functionspace2mesh = fspace2mesh(V)
-    mesh2functionspace = np.argsort(functionspace2mesh)
-
     activation_dict = {k * step_per_timeframe : mesh2functionspace[v] for k, v in activation_dict.items()}
 
     last_time = 0
@@ -138,7 +139,6 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     for i in range(num_steps):
         t += dt
         if i in activation_dict:
-            # u_n.x.array[activation_dict[i]] = 1
             J_stim.x.array[activation_dict[i]] = 0.5
             last_time = 50
         else:
