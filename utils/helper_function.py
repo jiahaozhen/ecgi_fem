@@ -337,20 +337,6 @@ def compute_error_phi(phi_exact: np.ndarray, phi_result: np.ndarray, function_sp
     cm = np.linalg.norm(cm1-cm2)
     return cm
 
-def get_epi_endo_marker(function_space: functionspace):
-    # This function is used to get the marker for epi and endo
-    # 1 for epi and -1 for endo
-    geom_data_ecgsim = h5py.File('3d/data/geom_ecgsim.mat', 'r')
-    pts_ecgsim = np.array(geom_data_ecgsim['geom_ventricle']['pts'])
-    marker_ecgsim_file = h5py.File('3d/data/marker_epi_endo.mat', 'r')
-    marker_ecgsim = np.array(marker_ecgsim_file['marker'])
-    pts_fem = function_space.tabulate_dof_coordinates()
-    # rbf
-    rbf = scipy.interpolate.RBFInterpolator(pts_ecgsim, marker_ecgsim, kernel='linear')
-    marker = rbf(pts_fem).flatten()
-    marker = np.where(marker > 0, 1, -1)
-    return marker
-
 def find_connected_vertex(domain: Mesh, vertex: int):
     
     domain.topology.create_connectivity(0, domain.topology.dim)
@@ -367,6 +353,66 @@ def find_connected_vertex(domain: Mesh, vertex: int):
     connected_vertices = sorted(list(connected_vertices))
     
     return connected_vertices
+
+def find_all_connected_vertex(domain: Mesh):
+    tdim = domain.topology.dim
+    domain.topology.create_connectivity(0, tdim)
+    domain.topology.create_connectivity(tdim, 0)
+    
+    conn_v_to_c = domain.topology.connectivity(0, tdim)
+    conn_c_to_v = domain.topology.connectivity(tdim, 0)
+    
+    num_vertices = domain.topology.index_map(0).size_local
+    all_neighbors = []
+
+    for v in range(num_vertices):
+        incident_cells = conn_v_to_c.links(v)
+        neighbors = set()
+        for cell in incident_cells:
+            cell_vertices = conn_c_to_v.links(cell)
+            neighbors.update(cell_vertices)
+        neighbors.discard(v)
+        all_neighbors.append(sorted(neighbors))
+
+    return all_neighbors
+
+def get_boundary_vertex_connectivity(domain: Mesh):
+    """
+    获取 dolfinx 网格外表面上的顶点连接关系（邻接表）。
+    返回:
+        boundary_vertices: list[int] 所有外表面顶点索引
+        adjacency: dict[int, set[int]] 顶点到其邻接顶点集合
+    """
+    tdim = domain.topology.dim
+    domain.topology.create_connectivity(tdim, tdim - 1)  # cell→facet
+    domain.topology.create_connectivity(tdim - 1, tdim)  # facet→cell
+    domain.topology.create_connectivity(tdim - 1, 0)     # facet→vertex
+
+    facet_to_cell = domain.topology.connectivity(tdim - 1, tdim)
+    facet_to_vertex = domain.topology.connectivity(tdim - 1, 0)
+
+    num_facets = domain.topology.index_map(tdim - 1).size_local
+
+    boundary_facets = [
+        f for f in range(num_facets)
+        if len(facet_to_cell.links(f)) == 1
+    ]
+
+    adjacency = {}
+    for f in boundary_facets:
+        vs = facet_to_vertex.links(f)
+        for i in range(len(vs)):
+            vi = vs[i]
+            adjacency.setdefault(vi, set())
+            for j in range(len(vs)):
+                if i == j:
+                    continue
+                vj = vs[j]
+                adjacency[vi].add(vj)
+
+    boundary_vertices = sorted(adjacency.keys())
+
+    return boundary_vertices, adjacency
 
 def find_vertex_with_neighbour_less_than_0(domain: Mesh, f: Function):
     index_function = np.where(f.x.array < 0)[0]
@@ -546,3 +592,48 @@ def distinguish_epi_endo(mesh_file: str, gdim: int) -> np.ndarray:
             epi_endo_marker[node_index_in_ventricle] = -1
     
     return epi_endo_marker.astype(np.int32)
+
+def get_ring_pts(mesh_file: str, gdim: int) -> np.ndarray:
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    tdim = domain.topology.dim
+    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+
+    points = subdomain_ventricle.geometry.x
+
+    epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
+    boundary_vertices, adjacency = get_boundary_vertex_connectivity(subdomain_ventricle)
+
+    ring_point_index = []
+
+    for v in boundary_vertices:
+        adjacency_list = adjacency[v]
+        marker = epi_endo_marker[v]
+        if marker != 1:
+            continue
+        for v_n in adjacency_list:
+            if epi_endo_marker[v_n] == -marker:
+                ring_point_index.append(v_n)
+
+    ring_points = points[ring_point_index]
+
+    return ring_points
+
+def distinguish_ring_pts(ring_points: np.ndarray):
+    from sklearn.cluster import DBSCAN
+
+    clustering = DBSCAN(eps=10, min_samples=1).fit(ring_points)  # eps 可调
+    labels = clustering.labels_
+    group1 = ring_points[labels == 0]
+    group2 = ring_points[labels == 1]
+
+    x_mean1 = group1[:, 0].mean()
+    x_mean2 = group2[:, 0].mean()
+
+    if x_mean1 < x_mean2:
+        left_ventricle = group1
+        right_ventricle = group2
+    else:
+        left_ventricle = group2
+        right_ventricle = group1
+
+    return left_ventricle, right_ventricle
