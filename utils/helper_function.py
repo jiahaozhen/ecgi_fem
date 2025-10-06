@@ -616,7 +616,7 @@ def get_ring_pts(mesh_file: str, gdim: int) -> np.ndarray:
 
     ring_points = points[ring_point_index]
 
-    return ring_points
+    return ring_point_index, ring_points
 
 def distinguish_ring_pts(ring_points: np.ndarray):
     from sklearn.cluster import DBSCAN
@@ -637,3 +637,39 @@ def distinguish_ring_pts(ring_points: np.ndarray):
         right_ventricle = group1
 
     return left_ventricle, right_ventricle
+
+def separate_lv_rv(points, mitral_ring, tricuspid_ring, offset_ratio=0.25):
+    # 1. 环中心
+    cL = mitral_ring.mean(axis=0)
+    cR = tricuspid_ring.mean(axis=0)
+    
+    # 2. 连线方向单位向量
+    v = cR - cL
+    dist = np.linalg.norm(v)
+    v /= dist
+    
+    # 3. 分界平面中心（向右偏移）
+    cM = (cL + cR) / 2
+    cM_shift = cM + offset_ratio * dist * v  # 向右心室方向平移
+    
+    # 4. 点投影与分类
+    proj = np.dot(points - cM_shift, v)
+    lv_mask = proj < 0
+    rv_mask = ~lv_mask
+
+    return points[lv_mask], points[rv_mask], lv_mask, rv_mask
+
+def get_apex_from_annulus_pts(vertices, annulus_pts):
+    V = np.asarray(vertices)
+    annulus = np.asarray(annulus_pts)
+    ann_centroid = annulus.mean(axis=0)
+    U, S, VT = np.linalg.svd(annulus - ann_centroid, full_matrices=False)
+    normal = VT[-1] / np.linalg.norm(VT[-1])
+    centroid = V.mean(axis=0)
+    if np.dot(normal, centroid - ann_centroid) < 0:
+        normal = -normal
+    proj = np.dot(V - ann_centroid, normal)
+    idx = np.argmax(proj)
+    apex = V[idx]
+
+    return apex
