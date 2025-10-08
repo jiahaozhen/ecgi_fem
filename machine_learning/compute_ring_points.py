@@ -7,7 +7,8 @@ from mpi4py import MPI
 import pyvista
 
 sys.path.append('.')
-from utils.helper_function import get_ring_pts, distinguish_ring_pts, find_vertex_with_coordinate
+from utils.helper_function import find_vertex_with_coordinate
+from utils.ventricular_segmentation_tools import get_ring_pts, distinguish_ring_pts
 
 mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
 gdim = 3

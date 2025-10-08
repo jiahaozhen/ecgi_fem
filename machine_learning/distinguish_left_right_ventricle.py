@@ -8,7 +8,7 @@ import numpy as np
 import pyvista
 
 sys.path.append('.')
-from utils.helper_function import get_ring_pts, distinguish_ring_pts
+from utils.ventricular_segmentation_tools import get_ring_pts, distinguish_ring_pts
 
 def separate_lv_rv(points, mitral_ring, tricuspid_ring, offset_ratio=0.25):
     """

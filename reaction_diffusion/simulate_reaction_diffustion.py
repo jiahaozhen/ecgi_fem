@@ -1,21 +1,17 @@
 import sys
 
 from dolfinx.io import gmshio
-from dolfinx.plot import vtk_mesh
-from dolfinx.mesh import create_submesh, locate_entities_boundary
+from dolfinx.mesh import create_submesh
 from dolfinx.fem import functionspace, Function, form
 from dolfinx.fem.petsc import assemble_vector, assemble_matrix, create_vector
 from ufl import TrialFunction, TestFunction, dot, grad, Measure
 from mpi4py import MPI
 from petsc4py import PETSc
-import h5py
-import matplotlib.pyplot as plt
-import scipy.interpolate
 import numpy as np
-import pyvista
 
 sys.path.append('.')
-from utils.helper_function import distinguish_epi_endo, eval_function, v_data_argument, compute_phi_with_v_timebased, find_vertex_with_coordinate, fspace2mesh, assign_function
+from utils.helper_function import eval_function, v_data_argument, compute_phi_with_v_timebased, find_vertex_with_coordinate, fspace2mesh, assign_function
+from utils.ventricular_segmentation_tools import distinguish_epi_endo
 
 def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           ischemia_flag=True, ischemia_epi_endo=[-1, 0, 1],

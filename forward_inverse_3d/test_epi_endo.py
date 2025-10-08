@@ -8,7 +8,7 @@ from mpi4py import MPI
 import pyvista
 
 sys.path.append('.')
-from utils.helper_function import distinguish_epi_endo
+from utils.ventricular_segmentation_tools import distinguish_epi_endo
 
 mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
 gdim = 3
