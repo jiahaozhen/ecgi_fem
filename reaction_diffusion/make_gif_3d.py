@@ -8,7 +8,8 @@ from mpi4py import MPI
 import pyvista
 import numpy as np
 # from main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
-from main_reaction_diffusion import compute_v_based_on_reaction_diffusion
+# from main_reaction_diffusion import compute_v_based_on_reaction_diffusion
+from simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
 
 sys.path.append('.')
 from utils.helper_function import eval_function
@@ -46,8 +47,8 @@ else:
 
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
-# u_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=ischemia_flag)
-u_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=ischemia_flag, surface_flag=True)
+u_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=ischemia_flag, ischemia_epi_endo=[1, 0, -1], step_per_timeframe=2)
+# u_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=ischemia_flag, surface_flag=True)
 # u_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(
 #     mesh_file, T=T, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag, 
 #     gdim=gdim, center_activation=center_activation, radius_activation=radius_activation,

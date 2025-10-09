@@ -15,6 +15,7 @@ import numpy as np
 sys.path.append('.')
 from utils.helper_function import v_data_argument, compute_phi_with_v_timebased
 
+# deprecated, simulate activation and ischemia at the same time
 def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=100, step_per_timeframe=5, 
                                           u_peak_ischemia_val=0.9, u_rest_ischemia_val=0.1,
                                           submesh_flag=False, ischemia_flag=False, 
