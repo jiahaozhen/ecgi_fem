@@ -18,19 +18,37 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           center_ischemia=np.array([32.1, 71.7, 15]), radius_ischemia=30,
                                           T=120, step_per_timeframe=10,
                                           u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3, tau=10,
-                                          data_argument=False, v_min=-90, v_max=10):
+                                          data_argument=False, v_min=-90, v_max=10,
+                                          plot_flag=False):
     '''
     diff between compute_v_based_on_reaction_diffusion in main_reaction_diffusion_on_ventricle.py:
     1. add ischemia_epi_endo to choose which layer to set ischemia
     2. activation is fixed
+    
+    diff between compute_v_based_on_reaction_diffusion in main_reaction_diffusion.py:
+    1. remove submesh_flag and surface_flag, always use submesh of ventricle
+    2. add ischemia_epi_endo to choose which layer to set ischemia
     '''
-    # mesh of Body
-    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
-    tdim = domain.topology.dim
-    # mesh of Heart
-    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
-    # 1 is epicardium, 0 is mid-myocardial, -1 is endocardium
-    epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
+    if not hasattr(compute_v_based_on_reaction_diffusion, "epi_endo_marker"):
+        # mesh of Body
+        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+        tdim = domain.topology.dim
+        # mesh of Heart
+        subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+        # 1 is epicardium, 0 is mid-myocardial, -1 is endocardium
+        epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
+        V = functionspace(subdomain_ventricle, ("Lagrange", 1))
+        functionspace2mesh = fspace2mesh(V)
+        mesh2functionspace = np.argsort(functionspace2mesh)
+        compute_v_based_on_reaction_diffusion.epi_endo_marker = epi_endo_marker
+        compute_v_based_on_reaction_diffusion.subdomain_ventricle = subdomain_ventricle
+        compute_v_based_on_reaction_diffusion.V = V
+        compute_v_based_on_reaction_diffusion.mesh2functionspace = mesh2functionspace
+    
+    subdomain_ventricle = compute_v_based_on_reaction_diffusion.subdomain_ventricle
+    epi_endo_marker = compute_v_based_on_reaction_diffusion.epi_endo_marker
+    mesh2functionspace = compute_v_based_on_reaction_diffusion.mesh2functionspace
+    V = compute_v_based_on_reaction_diffusion.V
 
     t = 0
     num_steps = T * step_per_timeframe
@@ -43,10 +61,6 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     tau_close = 150
     u_crit = 0.13
 
-    V = functionspace(subdomain_ventricle, ("Lagrange", 1))
-    functionspace2mesh = fspace2mesh(V)
-    mesh2functionspace = np.argsort(functionspace2mesh)
-
     marker_function = Function(V)
     assign_function(marker_function, np.arange(len(subdomain_ventricle.geometry.x)), epi_endo_marker)
 
@@ -57,22 +71,10 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
             self.center = center
             self.r = r
         def __call__(self, x):
-            if gdim == 3:
-                distance_value = (x[0]-self.center[0])**2 + (x[1]-self.center[1])**2 + (x[2]-self.center[2])**2 - self.r**2
-            else:
-                distance_value = (x[0]-self.center[0])**2 + (x[1]-self.center[1])**2 - self.r**2
-            
-            marker_value = eval_function(marker_function, x.transpose()).squeeze()
-            ret_value = np.full(x.shape[1], self.u_healthy, dtype=np.float64)
-            if 0 in ischemia_epi_endo:
-                condition = np.where(np.abs(marker_value-0) < 1e-3, distance_value < 0, False)
-                ret_value[condition] = self.u_ischemia
-            if 1 in ischemia_epi_endo:
-                condition = np.where(np.abs(marker_value-1) < 1e-3, distance_value < 0, False)
-                ret_value[condition] = self.u_ischemia
-            if -1 in ischemia_epi_endo:
-                condition = np.where(np.abs(marker_value+1) < 1e-3, distance_value < 0, False)
-                ret_value[condition] = self.u_ischemia
+            marker_value = eval_function(marker_function, x.T).ravel()
+            distance_value = np.sum((x.T - self.center)**2, axis=1) - self.r**2
+            mask = (distance_value < 0) & np.isin(marker_value.round(), ischemia_epi_endo)
+            ret_value = np.where(mask, self.u_ischemia, self.u_healthy)
             return ret_value
     
     u_peak = Function(V)
@@ -107,14 +109,20 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     bilinear_form = form(a_u)
     linear_form_u = form(L_u)
 
-    A = assemble_matrix(bilinear_form)
-    A.assemble()
+    if not hasattr(compute_v_based_on_reaction_diffusion, "solver"):
+        A = assemble_matrix(bilinear_form)
+        A.assemble()
+        compute_v_based_on_reaction_diffusion.A = A
+        solver = PETSc.KSP().create(subdomain_ventricle.comm)
+        solver.setOperators(A)
+        solver.setType("cg")  # 改为共轭梯度法
+        solver.getPC().setType("hypre")  # 或 "ilu", "gamg"
+        solver.setTolerances(rtol=1e-6)
+        compute_v_based_on_reaction_diffusion.solver = solver
+    else:
+        solver = compute_v_based_on_reaction_diffusion.solver
+    
     b_u = create_vector(linear_form_u)
-
-    solver = PETSc.KSP().create(subdomain_ventricle.comm)
-    solver.setOperators(A)
-    solver.setType(PETSc.KSP.Type.PREONLY)
-    solver.getPC().setType(PETSc.PC.Type.LU)
 
     activation_dict = {
         8 : np.array([57, 51.2, 15]),
@@ -153,7 +161,9 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     u_data = np.where(u_data > 1, 1, u_data)
     u_data = np.where(u_data < 0, 0, u_data)
     u_data = u_data * (v_max - v_min) + v_min
-    phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
+    phi_1 = None
+    phi_2 = None
+    # phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
     if data_argument:
         u_data = v_data_argument(phi_1, phi_2, tau=tau)
     
