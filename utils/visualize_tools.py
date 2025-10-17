@@ -2,6 +2,10 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap
 import numpy as np
+from dolfinx.plot import vtk_mesh
+import pyvista
+
+from .helper_function import eval_function
 
 def visualize_bullseye_points(theta, r, val):
     """在 bullseye 坐标上绘制点云分布"""
@@ -57,3 +61,35 @@ def visualize_bullseye_segment(values):
             )
 
     plt.show()
+
+def plot_val_on_mesh(mesh_file, val, gdim=3, target_cell=None, name="f", title="Function on Mesh", f_val_flag=False):
+    from dolfinx.io import gmshio
+    from mpi4py import MPI
+    from dolfinx.mesh import create_submesh
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    if target_cell is not None:
+        cells = cell_markers.find(target_cell)
+        subdomain, _, _, _ = create_submesh(domain, domain.topology.dim, cells)
+        domain = subdomain
+    if f_val_flag:
+        from dolfinx.fem import Function, functionspace
+        f = Function(functionspace(domain, ("Lagrange", 1)))
+        f.x.array[:] = val
+        plot_f_on_domain(domain, f, name=name, tdim=domain.topology.dim, title=title)
+    else:
+        plot_val_on_domain(domain, val, name=name, tdim=domain.topology.dim, title=title)
+
+def plot_f_on_domain(domain, f, name="f", tdim=3, title="Function on Domain"):
+    val = eval_function(f, domain.geometry.x)
+    plot_val_on_domain(domain, val, name=name, tdim=tdim, title=title)
+
+def plot_val_on_domain(domain, val, name="val", tdim=3, title="Value on Domain"):
+    grid = pyvista.UnstructuredGrid(*vtk_mesh(domain, tdim))
+    grid.point_data[name] = val
+    grid.set_active_scalars(name)
+    plotter = pyvista.Plotter()
+    plotter.add_mesh(grid, show_edges=True)
+    plotter.add_title(title)
+    plotter.view_yz()
+    plotter.add_axes()
+    plotter.show(auto_close=False)

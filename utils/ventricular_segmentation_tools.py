@@ -141,10 +141,10 @@ def assign_segment(hi, theta_deg):
         ring = 'apical'
         n_seg, offset = 4, 12
     else:
-        return 17  # segment 17 (apex cap)
+        return 16  # segment 17 (apex cap)
 
     theta_deg = (theta_deg + 360) % 360
-    seg = int(theta_deg / (360 / n_seg)) + 1 + offset
+    seg = int(theta_deg / (360 / n_seg)) + offset
     return seg
 
 def lv_17_segmentation(lv_points, annulus_points, apex_point):
@@ -171,3 +171,35 @@ def lv_17_segmentation(lv_points, annulus_points, apex_point):
         theta_mapped.append(theta)
         seg_ids.append(assign_segment(h, theta))
     return np.array(seg_ids), np.array(r_mapped), np.array(theta_mapped)
+
+def lv_17_segmentation_from_mesh(mesh_file: str, gdim: int = 3) -> np.ndarray:
+    """
+    Perform 17-segment segmentation of the left ventricle based on the mesh file.
+    
+    Parameters:
+    - mesh_file: Path to the mesh file.
+    - gdim: Geometric dimension of the mesh (default is 3).
+    
+    Returns:
+    - segment_ids: Array of segment IDs for each vertex in the left ventricle.
+    """
+    # Load mesh and extract ventricle submesh
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    tdim = domain.topology.dim
+    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+    
+    points = subdomain_ventricle.geometry.x
+    ring_point_indices, ring_points = get_ring_pts(mesh_file, gdim=gdim)
+    mitral_ring, tricuspid_ring = distinguish_ring_pts(ring_points)
+    
+    lv_points, rv_points, lv_mask, rv_mask = separate_lv_rv(points, mitral_ring, tricuspid_ring)
+    
+    apex_point = get_apex_from_annulus_pts(points, mitral_ring)
+    
+    segment_ids_lv, r_mapped, theta_mapped = lv_17_segmentation(lv_points, mitral_ring, apex_point)
+    
+    segment_ids = np.zeros(points.shape[0], dtype=np.int32)
+    segment_ids[lv_mask] = segment_ids_lv
+    segment_ids[rv_mask] = -1  # RV points marked as -1
+    
+    return segment_ids
