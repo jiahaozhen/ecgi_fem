@@ -30,3 +30,28 @@ def extract_data_from_function(f_data: np.ndarray, functionspace: functionspace,
         f.x.array[:] = f_data[i]
         data.append(eval_function(f, coords).squeeze())
     return np.array(data)
+
+def fspace2mesh(V: functionspace):
+    '''
+    return the mapping from function space dof index to mesh vertex index
+    fspace2mesh[index in function space] = index in mesh
+    '''
+    fspace_cell2point = V.dofmap.list
+    subdomain_cell2point = V.mesh.geometry.dofmap
+
+    fspace2mesh = np.ones((len(V.mesh.geometry.x)), dtype=int) * -1
+    for cell2point1, cell2point2 in zip(fspace_cell2point, subdomain_cell2point):
+        for idx_fspace, idx_submesh in zip(cell2point1, cell2point2):
+            if fspace2mesh[idx_fspace] != -1:
+                assert fspace2mesh[idx_fspace] == idx_submesh
+            else:
+                fspace2mesh[idx_fspace] = idx_submesh
+    return fspace2mesh
+
+def assign_function(f: Function, idx: np.ndarray, val: np.ndarray):
+    '''idx means the value's order in domain.geometry.x'''
+    assert len(val) == len(f.x.array)
+    assert len(idx) == len(val)
+    functionspace2mesh = fspace2mesh(f.function_space)
+    mesh2functionspace = np.argsort(functionspace2mesh)
+    f.x.array[mesh2functionspace[idx]] = val

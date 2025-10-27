@@ -100,7 +100,6 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
 
     A = assemble_matrix(bilinear_form)
     A.assemble()
-    compute_v_based_on_reaction_diffusion.A = A
     solver = PETSc.KSP().create(subdomain_ventricle.comm)
     solver.setOperators(A)
     solver.setType("cg")  # 改为共轭梯度法
