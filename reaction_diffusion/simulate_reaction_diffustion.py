@@ -18,8 +18,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           center_ischemia=np.array([32.1, 71.7, 15]), radius_ischemia=30,
                                           T=120, step_per_timeframe=10,
                                           u_peak_ischemia_val=0.7, u_rest_ischemia_val=0.3, tau=10,
-                                          data_argument=False, v_min=-90, v_max=10,
-                                          plot_flag=False):
+                                          data_argument=False, v_min=-90, v_max=10):
     '''
     diff between compute_v_based_on_reaction_diffusion in main_reaction_diffusion_on_ventricle.py:
     1. add ischemia_epi_endo to choose which layer to set ischemia
@@ -29,26 +28,16 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     1. remove submesh_flag and surface_flag, always use submesh of ventricle
     2. add ischemia_epi_endo to choose which layer to set ischemia
     '''
-    if not hasattr(compute_v_based_on_reaction_diffusion, "epi_endo_marker"):
-        # mesh of Body
-        domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
-        tdim = domain.topology.dim
-        # mesh of Heart
-        subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
-        # 1 is epicardium, 0 is mid-myocardial, -1 is endocardium
-        epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
-        V = functionspace(subdomain_ventricle, ("Lagrange", 1))
-        functionspace2mesh = fspace2mesh(V)
-        mesh2functionspace = np.argsort(functionspace2mesh)
-        compute_v_based_on_reaction_diffusion.epi_endo_marker = epi_endo_marker
-        compute_v_based_on_reaction_diffusion.subdomain_ventricle = subdomain_ventricle
-        compute_v_based_on_reaction_diffusion.V = V
-        compute_v_based_on_reaction_diffusion.mesh2functionspace = mesh2functionspace
-    
-    subdomain_ventricle = compute_v_based_on_reaction_diffusion.subdomain_ventricle
-    epi_endo_marker = compute_v_based_on_reaction_diffusion.epi_endo_marker
-    mesh2functionspace = compute_v_based_on_reaction_diffusion.mesh2functionspace
-    V = compute_v_based_on_reaction_diffusion.V
+    # mesh of Body
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    tdim = domain.topology.dim
+    # mesh of Heart
+    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+    # 1 is epicardium, 0 is mid-myocardial, -1 is endocardium
+    epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
+    V = functionspace(subdomain_ventricle, ("Lagrange", 1))
+    functionspace2mesh = fspace2mesh(V)
+    mesh2functionspace = np.argsort(functionspace2mesh)
 
     t = 0
     num_steps = T * step_per_timeframe
@@ -109,18 +98,14 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     bilinear_form = form(a_u)
     linear_form_u = form(L_u)
 
-    if not hasattr(compute_v_based_on_reaction_diffusion, "solver"):
-        A = assemble_matrix(bilinear_form)
-        A.assemble()
-        compute_v_based_on_reaction_diffusion.A = A
-        solver = PETSc.KSP().create(subdomain_ventricle.comm)
-        solver.setOperators(A)
-        solver.setType("cg")  # 改为共轭梯度法
-        solver.getPC().setType("hypre")  # 或 "ilu", "gamg"
-        solver.setTolerances(rtol=1e-6)
-        compute_v_based_on_reaction_diffusion.solver = solver
-    else:
-        solver = compute_v_based_on_reaction_diffusion.solver
+    A = assemble_matrix(bilinear_form)
+    A.assemble()
+    compute_v_based_on_reaction_diffusion.A = A
+    solver = PETSc.KSP().create(subdomain_ventricle.comm)
+    solver.setOperators(A)
+    solver.setType("cg")  # 改为共轭梯度法
+    solver.getPC().setType("hypre")  # 或 "ilu", "gamg"
+    solver.setTolerances(rtol=1e-6)
     
     b_u = create_vector(linear_form_u)
 
@@ -135,7 +120,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     }
     activation_dict = {k : find_vertex_with_coordinate(subdomain_ventricle, v) for k, v in activation_dict.items()}
 
-    activation_dict = {k * step_per_timeframe : mesh2functionspace[v] for k, v in activation_dict.items()}
+    activation_dict = {int(k * step_per_timeframe) : mesh2functionspace[v] for k, v in activation_dict.items()}
 
     last_time = 0
     u_data = []
@@ -144,7 +129,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         t += dt
         if i in activation_dict:
             J_stim.x.array[activation_dict[i]] = 0.5
-            last_time = 50
+            last_time = step_per_timeframe * 5
         else:
             last_time = last_time - 1
             if last_time < 0:
@@ -161,9 +146,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     u_data = np.where(u_data > 1, 1, u_data)
     u_data = np.where(u_data < 0, 0, u_data)
     u_data = u_data * (v_max - v_min) + v_min
-    phi_1 = None
-    phi_2 = None
-    # phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
+    phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
     if data_argument:
         u_data = v_data_argument(phi_1, phi_2, tau=tau)
     
