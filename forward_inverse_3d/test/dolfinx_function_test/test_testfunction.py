@@ -7,18 +7,18 @@ import numpy as np
 from ufl import TestFunction, TrialFunction, Measure
 from mpi4py import MPI
 
-file = "3d/data/mesh_multi_conduct_ecgsim.msh"
+file = "forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh"
 domain, cell_markers, facet_markers = gmshio.read_from_msh(file, MPI.COMM_WORLD, gdim=3)
 tdim = domain.topology.dim
 # mesh of Heart
 subdomain, ventricle_to_torso, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
 
-V2 = functionspace(subdomain, ("Lagrange", 1))
-# u = TrialFunction(V2)
-u = TestFunction(V2)
-phi = Function(V2)
+V = functionspace(subdomain, ("Lagrange", 1))
+u = TrialFunction(V)
+# u = TestFunction(V)
+phi = Function(V)
 
-for index in range(len(V2.tabulate_dof_coordinates())):
+for index in range(len(V.tabulate_dof_coordinates())):
     phi.x.array[index-1] = 0
     phi.x.array[index] = 1
 
@@ -30,7 +30,7 @@ for index in range(len(V2.tabulate_dof_coordinates())):
     a_array = a_vector.array
     index1 = np.where(a_array != 0)[0]
 
-    functionspace_cell = V2.dofmap.list
+    functionspace_cell = V.dofmap.list
     index2 = []
     for row in functionspace_cell:
         if index in row:

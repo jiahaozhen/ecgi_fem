@@ -2,7 +2,7 @@ import h5py
 import gmsh
 import numpy as np
 
-def create_mesh(target_file, lc, multi_flag=True):
+def create_mesh(source_file, target_file, lc, multi_flag=True, lc_ratio=4):
     """
     Generates a 3D mesh for anatomical structures from geometry data stored in a .mat file using the GMSH meshing library.
 
@@ -15,7 +15,7 @@ def create_mesh(target_file, lc, multi_flag=True):
     Returns:
         None
     """
-    geom_data = h5py.File('3d/data/geom_ecgsim.mat', 'r')
+    geom_data = h5py.File(source_file, 'r')
 
     geom_ventricle = geom_data['geom_ventricle']
     geom_thorax = geom_data['geom_thorax']
@@ -86,7 +86,7 @@ def create_mesh(target_file, lc, multi_flag=True):
         gmsh.model.addPhysicalGroup(3, [model_ventricle], 2)  # Heart as physical group 2
 
     # mesh size
-    lc_ventricle = lc / 4
+    lc_ventricle = lc / lc_ratio
     lc_other = lc
 
     # 创建 Box 尺寸场，使 model_ventricle 具有更细网格
@@ -112,5 +112,6 @@ def create_mesh(target_file, lc, multi_flag=True):
 
 if __name__ == '__main__':
     lc = 40
-    file = '3d/data/mesh_multi_conduct_ecgsim.msh'
-    create_mesh(file, lc)
+    source_file = r'forward_inverse_3d/data/geom_ecgsim.mat'
+    target_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
+    create_mesh(source_file, target_file, lc)

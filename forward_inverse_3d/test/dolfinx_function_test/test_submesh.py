@@ -1,3 +1,7 @@
+'''
+函数空间点序列与网格点序列不一致的问题 
+子网格点序列与原网格点序列不一致的问题
+'''
 import sys
 
 from dolfinx.io import gmshio
@@ -9,7 +13,7 @@ from mpi4py import MPI
 sys.path.append('.')
 from utils.helper_function import submesh_node_index, eval_function, assign_function, fspace2mesh
 
-file = "3d/data/mesh_multi_conduct_ecgsim.msh"
+file = r"forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh"
 domain, cell_markers, facet_markers = gmshio.read_from_msh(file, MPI.COMM_WORLD, gdim=3)
 tdim = domain.topology.dim
 # mesh of Heart
@@ -21,6 +25,7 @@ subdomain_boundary_index = locate_entities_boundary(subdomain, tdim-3, lambda x:
 domain_pts = domain.geometry.x
 subdomain_pts = subdomain.geometry.x
 
+'''test submesh_node_index function'''
 submesh2mesh = []
 for row in subdomain_pts:
     matches = np.where((domain_pts == row).all(axis=1))[0]

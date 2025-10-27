@@ -1,8 +1,8 @@
 import scipy.io as sio
 
-from main_create_mesh_ecgsim_multi_conduct import create_mesh
-from main_ecgsim2fem import ecgsim2fem
-from main_forward_tmp import compute_d_from_tmp
+from forward_inverse_3d.mesh.create_mesh_ecgsim_multi_conduct import create_mesh
+from forward_inverse_3d.main_ecgsim2fem import ecgsim2fem
+from forward_inverse_3d.main_forward_tmp import compute_d_from_tmp
 
 file = '3d/data/mesh_multi_conduct_ecgsim.msh'
 for lc in range(10, 101, 5):

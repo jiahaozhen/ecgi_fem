@@ -1,3 +1,6 @@
+'''
+检查reaction-diffusion方程生成的数据
+'''
 import sys
 
 from dolfinx.io import gmshio
@@ -13,8 +16,7 @@ import matplotlib.pyplot as plt
 sys.path.append('.')
 from utils.helper_function import eval_function
 
-# mesh_file = '2d/data/heart_torso.msh'
-mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
+mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
 # mesh of Body
 domain, cell_markers, facet_markers = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
 tdim = domain.topology.dim
@@ -24,9 +26,9 @@ sub_node_num = subdomain_ventricle.topology.index_map(0).size_local
 
 V2 = functionspace(subdomain_ventricle, ("Lagrange", 1))
 
-v_exact_all_time = np.load('3d/data/v_data_reaction_diffusion_denoise_normal_data_argument.npy')
-phi_1_exact = np.load('3d/data/phi_1_data_reaction_diffusion_denoise_normal_data_argument.npy')
-phi_2_exact = np.load('3d/data/phi_2_data_reaction_diffusion_denoise_normal_data_argument.npy')
+v_exact_all_time = np.load('forward_inverse_3d/data/v_data_reaction_diffusion_normal_data_argument.npy')
+phi_1_exact = np.load('forward_inverse_3d/data/phi_1_data_reaction_diffusion_normal.npy')
+phi_2_exact = np.load('forward_inverse_3d/data/phi_2_data_reaction_diffusion_normal.npy')
 
 plt.plot(v_exact_all_time[:, 272], label='v_exact_0')
 plt.plot(v_exact_all_time[:, 1], label='v_exact_1')

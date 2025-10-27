@@ -1,9 +1,10 @@
+# 请使用test_space_convergence.py进行收敛性测试
 import sys
 
-from main_create_mesh_ecgsim_ventricle import create_mesh
+from forward_inverse_3d.mesh.create_mesh_ecgsim_multi_conduct import create_mesh
 
 sys.path.append('.')
-from reaction_diffusion.main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
+from reaction_diffusion.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
 from utils.helper_function import get_activation_time_from_v
 
 activation_last = []

@@ -1,17 +1,20 @@
+'''
+检查电压数据噪声水平
+'''
 import numpy as np
 import sys
 import matplotlib.pyplot as plt
 sys.path.append('.')
 from utils.helper_function import add_noise_based_on_snr, check_noise_level_snr
 
-d_data = np.load('3d/data/u_data_reaction_diffusion_normal_data_argument.npy')
+d_data = np.load('forward_inverse_3d/data/u_data_reaction_diffusion_normal_data_argument.npy')
 # noise_data_10dB = add_noise_based_on_snr(d_data, snr=10)
 # noise_data_20dB = add_noise_based_on_snr(d_data, snr=20)
 # noise_data_30dB = add_noise_based_on_snr(d_data, snr=30)
 
-# np.save('3d/data/u_data_reaction_diffusion_normal_data_argument_10dB.npy', noise_data_10dB)
-# np.save('3d/data/u_data_reaction_diffusion_normal_data_argument_20dB.npy', noise_data_20dB)
-# np.save('3d/data/u_data_reaction_diffusion_normal_data_argument_30dB.npy', noise_data_30dB)
+# np.save('forward_inverse_3d/data/u_data_reaction_diffusion_normal_data_argument_10dB.npy', noise_data_10dB)
+# np.save('forward_inverse_3d/data/u_data_reaction_diffusion_normal_data_argument_20dB.npy', noise_data_20dB)
+# np.save('forward_inverse_3d/data/u_data_reaction_diffusion_normal_data_argument_30dB.npy', noise_data_30dB)
 noise = add_noise_based_on_snr(d_data, snr=20)
 noise_level = check_noise_level_snr(d_data, noise-d_data)
 print(f'Noise level SNR:{noise_level} dB')

@@ -24,8 +24,9 @@ tdim = domain.topology.dim
 subdomain_ventricle, ventricle_to_torso, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
 
 ischemia_flag = False
+step_per_timeframe = 10
 v_data_fem, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, gdim=3, T=500, 
-                                                             step_per_timeframe=10, 
+                                                             step_per_timeframe=step_per_timeframe, 
                                                              ischemia_flag=ischemia_flag)
 d_data_fem = compute_d_from_tmp(mesh_file, v_data=v_data_fem)
 
@@ -55,8 +56,8 @@ leads = [
     "lead V4", "lead V5", "lead V6", "lead aVR", "lead aVL", "lead aVF"
 ]
 
-time_1 = np.arange(0, standard12Lead_fem.shape[0] / 10, 0.1)
-time_2 = np.arange(0, standard12Lead_bem.shape[0] / 10, 0.1)
+time_1 = np.arange(0, standard12Lead_fem.shape[0] / step_per_timeframe, 1 / step_per_timeframe)
+time_2 = np.arange(0, standard12Lead_bem.shape[0] / step_per_timeframe, 1 / step_per_timeframe)
 for i, ax in enumerate(axs.flat):
     ax.plot(time_1, standard12Lead_fem[:, i])
     ax.plot(time_2, standard12Lead_bem[:, i], linestyle='--')

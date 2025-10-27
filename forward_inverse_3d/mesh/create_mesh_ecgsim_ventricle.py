@@ -2,8 +2,9 @@ import h5py
 import gmsh
 import numpy as np
 
-def create_mesh(target_file, lc):
-    geom_data = h5py.File('3d/data/geom_ecgsim.mat', 'r')
+# 功能已融入.create_mesh_ecgsim_multi_conduct.create_mesh中
+def create_mesh(source_file, target_file, lc):
+    geom_data = h5py.File(source_file, 'r')
 
     geom_ventricle = geom_data['geom_ventricle']
     geom_ventricle_fac = np.array(geom_ventricle['fac'], dtype = np.int32) - 1
@@ -44,5 +45,6 @@ def create_mesh(target_file, lc):
 
 if __name__ == '__main__':
     lc = 3
-    target_file = '3d/data/mesh_ecgsim_ventricle.msh'
-    create_mesh(target_file, lc)
+    source_file = r'forward_inverse_3d/data/geom_ecgsim.mat'
+    target_file = r'forward_inverse_3d/data/mesh_ecgsim_ventricle.msh'
+    create_mesh(source_file, target_file, lc)

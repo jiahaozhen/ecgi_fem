@@ -9,7 +9,7 @@ import scipy.io as sio
 
 sys.path.append('.')
 from utils.helper_function import compute_grad, submesh_node_index, compute_normal
-from main_create_mesh_ecgsim_multi_conduct import create_mesh
+from forward_inverse_3d.mesh.create_mesh_ecgsim_multi_conduct import create_mesh
 from main_ecgsim2fem import ecgsim2fem
 from main_forward_tmp import forward_tmp
 
