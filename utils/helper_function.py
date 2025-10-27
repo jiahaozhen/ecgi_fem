@@ -299,6 +299,7 @@ def assign_function(f: Function, idx: np.ndarray, val: np.ndarray):
     f.x.array[mesh2functionspace[idx]] = val
 
 def fspace2mesh(V: functionspace):
+    '''return the mapping from function space dof index to mesh vertex index'''
     fspace_cell2point = V.dofmap.list
     subdomain_cell2point = V.mesh.geometry.dofmap
 
