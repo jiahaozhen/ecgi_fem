@@ -32,5 +32,26 @@ if __name__ == "__main__":
     M_Val = eval_function(M, domain.geometry.x[0:10])
     print("Conductivity tensor M at first 10 mesh points:")
     print(M_Val)
+
+    f_coords = V.tabulate_dof_coordinates()
+    mesh_coords = domain.geometry.x
+
+    print("f_coords shape:", f_coords.shape)
+    print("mesh_coords shape:", mesh_coords.shape)
+
+    dofs_per_cell = V.element.space_dimension
+
+    # 获取单元节点索引
+    cells = domain.topology.connectivity(domain.topology.dim, 0)
+    cells = cells.array.reshape(-1, domain.geometry.dim + 1)  # 三角形每个单元有3个节点
+
+    # 获取节点坐标
+    node_coords = domain.geometry.x
+
+    # 计算单元重心
+    cell_centers = np.array([node_coords[cell].mean(axis=0) for cell in cells])
+    
+    print("Are DG0 DOF coordinates equal to cell centers?")
+    print(np.allclose(f_coords, cell_centers))
     
 
