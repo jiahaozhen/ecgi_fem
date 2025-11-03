@@ -8,21 +8,40 @@ from utils.helper_function import transfer_bsp_to_standard12lead
 # 基础配置
 # =========================================================
 mesh_file_template = 'forward_inverse_3d/data/mesh/mesh_multi_conduct_lc_{}_lc_ratio_{}.msh'
-# lc_list = [20, 30, 40, 50, 60, 70, 80]
-# lc_ratio_list = [2, 3, 4, 5]
-lc_list = [20, 30]
-lc_ratio_list = [4]
+lc_list = [20, 30, 40, 50, 60, 70, 80]
+lc_ratio_list = [2, 3, 4, 5]
 
-# 9 个导联电极索引（转为 0-based）
-leadIndex = np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1
+def extract_v_data(mesh_file, v_data):
+    from dolfinx.io import gmshio
+    from dolfinx.fem import functionspace
+    from dolfinx.mesh import create_submesh
+    from mpi4py import MPI
+
+    # 读取网格文件
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD)
+    tdim = domain.topology.dim
+
+    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+
+    # 创建函数空间
+    V = functionspace(subdomain_ventricle, ("CG", 1))
+
+    target_pts = np.array([[59.4, 29.8, 15], [88.3, 41.2, -37.3], [69.1, 27.1, -30]])
+    coords = V.tabulate_dof_coordinates()
+
+    distances = np.linalg.norm(coords - target_pts[:, np.newaxis], axis=2)
+    closest_vertex = np.argmin(distances, axis=1)
+
+    return v_data[:, closest_vertex]
+
 
 # =========================================================
 # 指标计算函数
 # =========================================================
-def compute_metrics_for_lc(d_base, d_other):
+def compute_metrics_for_v(v_base, v_other):
     """
     计算单个 lc 和 lc_ratio 相对于基准的多指标相似性。
-    d_base, d_other: shape = (n_leads, n_time)
+    v_base, v_other: shape = (n_leads, n_time)
     返回:
         {
           "corr": 平均皮尔逊相关,
@@ -31,11 +50,11 @@ def compute_metrics_for_lc(d_base, d_other):
           "peak_shift": 平均峰值时间偏移（采样点数）
         }
     """
-    n_leads = d_base.shape[1]
+    n_leads = v_base.shape[1]
     r_list, rmse_list, relL2_list, peak_shift_list = [], [], [], []
 
     for i in range(n_leads):
-        x, y = d_base[:,i], d_other[:,i]
+        x, y = v_base[:,i], v_other[:,i]
 
         # 1. 皮尔逊相关系数
         if np.std(x) == 0 or np.std(y) == 0:
@@ -68,19 +87,19 @@ def compute_metrics_for_lc(d_base, d_other):
 # =========================================================
 # 主指标计算
 # =========================================================
-def compute_d_convergence_metrics(d_data_dict, base_lc=20, base_lc_ratio=1):
+def compute_v_convergence_metrics(v_data_dict, base_lc=20, base_lc_ratio=1):
     """
-    计算不同 lc 和 lc_ratio 下 BSP 信号相对基准的多指标相似度
+    计算不同 lc 和 lc_ratio 下 V 信号相对基准的多指标相似度
     """
-    base_d = d_data_dict[(base_lc, base_lc_ratio)]
+    base_v = v_data_dict[(base_lc, base_lc_ratio)]
     summary = {}
 
-    print("\n=== Mesh Convergence Analysis ===")
-    for (lc, lc_ratio), d in sorted(d_data_dict.items()):
+    print("\n=== Mesh Convergence Analysis for V ===")
+    for (lc, lc_ratio), v in sorted(v_data_dict.items()):
         if (lc, lc_ratio) == (base_lc, base_lc_ratio):
             continue
 
-        metrics = compute_metrics_for_lc(base_d, d)
+        metrics = compute_metrics_for_v(base_v, v)
         summary[(lc, lc_ratio)] = metrics
         print(
             f"lc={lc:>3d}, lc_ratio={lc_ratio:>2d} vs base lc={base_lc}, lc_ratio={base_lc_ratio}: "
@@ -138,38 +157,29 @@ def plot_convergence(summary, base_lc=20, base_lc_ratio=1):
     plt.show()
 
 # =========================================================
-# 绘制十二导联叠加图
+# 绘制 v_data_dict 数据的函数
 # =========================================================
-def plot_12lead(d_data_dict):
+def plot_v_data_dict(v_data_dict):
     """
-    绘制十二导联叠加图，不同 lc 和 lc_ratio 的数据叠加。
-    
-    参数：
-        d_data_dict: dict, 包含不同 lc 和 lc_ratio 的数据
-        leadIndex: list, 导联索引
-        step_per_timeframe: int, 每时间帧的步长
+    将 v_data_dict 中不同 lc 和 lc_ratio 的数据绘制在一张图上，
+    但不同的 v 数据绘制在不同的子图中。
     """
-    leads = [
-        "lead I", "lead II", "lead III", "lead V1", "lead V2", "lead V3",
-        "lead V4", "lead V5", "lead V6", "lead aVR", "lead aVL", "lead aVF"
-    ]
+    num_v = next(iter(v_data_dict.values())).shape[1]  # 获取 v 的数量
 
-    fig, axs = plt.subplots(4, 3, figsize=(15, 10))
-    axs = axs.flatten()
+    fig, axs = plt.subplots(num_v, 1, figsize=(10, 3 * num_v), sharex=True)  # 调整每张子图的大小
+    if num_v == 1:
+        axs = [axs]  # 保证 axs 是一个列表
 
-    for i, ax in enumerate(axs):
-        for (lc, lc_ratio), d_data in sorted(d_data_dict.items()):
-            time = np.arange(0, d_data.shape[0], 1)
-            ax.plot(time, d_data[:,i], label=f"lc={lc}, lc_ratio={lc_ratio}")
+    for v_idx in range(num_v):
+        for (lc, lc_ratio), v_data in sorted(v_data_dict.items()):
+            axs[v_idx].plot(v_data[:,v_idx], label=f"lc={lc}, lc_ratio={lc_ratio}")
+        axs[v_idx].set_title(f"V Index {v_idx}")
+        axs[v_idx].set_xlabel("Time")
+        axs[v_idx].set_ylabel("V Values")
+        axs[v_idx].legend()
+        axs[v_idx].grid(True)
 
-        ax.set_title(leads[i])
-        ax.set_xlabel("Time (ms)")
-        ax.set_ylabel("Potential (mV)")
-        ax.grid(True)
-        ax.legend(fontsize="small")
-
-    fig.suptitle("12-lead ECG", fontsize=16)
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.tight_layout()
     plt.show()
 
 # =========================================================
@@ -177,15 +187,15 @@ def plot_12lead(d_data_dict):
 # =========================================================
 if __name__ == "__main__":
     # 更新后的文件路径
-    filename_template = 'forward_inverse_3d/data/results_lc_{lc}_ratio_{lc_ratio}.npz'
+    filename_template = 'forward_inverse_3d/data/results_lc_{}_ratio_{}.npz'
 
-    d_data_dict = {}
+    v_data_dict = {}
 
     # 找到存在的文件中 lc 最小且 lc_ratio 最大的基准值
     base_lc, base_lc_ratio = None, None
     for lc in sorted(lc_list):
         for lc_ratio in sorted(lc_ratio_list, reverse=True):
-            filename = filename_template.format(lc=lc, lc_ratio=lc_ratio)
+            filename = filename_template.format(lc, lc_ratio)
             if os.path.exists(filename):
                 base_lc, base_lc_ratio = lc, lc_ratio
                 break
@@ -201,22 +211,22 @@ if __name__ == "__main__":
     # 加载每个 lc 和 lc_ratio 的数据
     for lc in lc_list:
         for lc_ratio in lc_ratio_list:
-            filename = filename_template.format(lc=lc, lc_ratio=lc_ratio)
+            filename = filename_template.format(lc, lc_ratio)
             try:
                 data = np.load(filename)
-                d_data_dict[(lc, lc_ratio)] = transfer_bsp_to_standard12lead(data['d_data'], leadIndex)  # 确保数据格式正确
+                v_data_dict[(lc, lc_ratio)] = extract_v_data(mesh_file_template.format(lc, lc_ratio), data['v_data'])  # 确保数据格式正确
                 print(f"Loaded data for lc={lc}, lc_ratio={lc_ratio} from {filename}")
             except FileNotFoundError:
                 print(f"File not found: {filename}. Skipping.")
 
     # 如果没有数据，退出程序
-    if not d_data_dict:
+    if not v_data_dict:
         print("No data files found. Exiting.")
         exit()
 
     # 计算指标并绘图
-    metrics_summary = compute_d_convergence_metrics(d_data_dict, base_lc=base_lc, base_lc_ratio=base_lc_ratio)
+    metrics_summary = compute_v_convergence_metrics(v_data_dict, base_lc=base_lc, base_lc_ratio=base_lc_ratio)
     plot_convergence(metrics_summary, base_lc=base_lc, base_lc_ratio=base_lc_ratio)
 
-    # 绘制十二导联叠加图
-    plot_12lead(d_data_dict)
+    # 绘制 v_data_dict 数据
+    plot_v_data_dict(v_data_dict)
