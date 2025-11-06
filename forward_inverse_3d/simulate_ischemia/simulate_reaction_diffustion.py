@@ -33,6 +33,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     # mesh of Heart
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
     V = functionspace(subdomain_ventricle, ("Lagrange", 1))
+    V_piecewise = functionspace(subdomain_ventricle, ("DG", 0))
     functionspace2mesh = fspace2mesh(V)
     mesh2functionspace = np.argsort(functionspace2mesh)
 
@@ -58,7 +59,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
             ret_value = np.where(mask, self.u_ischemia, self.u_healthy)
             return ret_value
     
-    D = build_D(V, condition=ischemia_condition, scar=scar_flag, ischemia=ischemia_flag)
+    D = build_D(V_piecewise, condition=ischemia_condition, scar=scar_flag, ischemia=ischemia_flag)
     tau_out = 10
     tau_open = 130
     tau_close = build_tau_close(marker_function, ischemia_condition, ischemia=ischemia_flag, vary=tau_close_vary)
@@ -103,7 +104,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     solver.setOperators(A)
     solver.setType("cg")  # 改为共轭梯度法
     solver.getPC().setType("gamg")  # 或 "ilu", "gamg"
-    solver.setTolerances(rtol=1e-6)
+    solver.setTolerances(rtol=1e-8)
     
     b_u = create_vector(linear_form_u)
 
@@ -141,8 +142,8 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         v_n.x.array[:] = v_n.x.array + dt * np.where(u_n.x.array < u_crit, (1 - v_n.x.array) / tau_open, -v_n.x.array / tau_close.x.array)
         u_data.append(u_n.x.array.copy())
     u_data = np.array(u_data)
-    u_data = np.where(u_data > 1, 1, u_data)
-    u_data = np.where(u_data < 0, 0, u_data)
+    # u_data = np.where(u_data > 1, 1, u_data)
+    # u_data = np.where(u_data < 0, 0, u_data)
     u_data = u_data * (v_max - v_min) + v_min
     phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
     if data_argument:
