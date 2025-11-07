@@ -34,11 +34,15 @@ marker = np.zeros(subdomain_ventricle.geometry.x.shape[0], dtype=np.int32)
 marker[lv_mask] = seg_ids
 marker[rv_mask] = -1
 
-plotter = pyvista.Plotter()
+plotter = pyvista.Plotter(off_screen=True)  # off_screen=True 防止弹出窗口
 grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain_ventricle, tdim))
 grid.point_data["f"] = marker
 grid.set_active_scalars("f")
+
 plotter.add_mesh(grid, show_edges=True)
 plotter.view_yz()
 plotter.add_axes()
-plotter.show()
+
+# 保存图像
+plotter.screenshot("ventricle_segments.png")  # 指定输出文件名
+plotter.close()
