@@ -153,7 +153,10 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
             loc_b.set(0)
         assemble_vector(b_u, linear_form_u)
         solver.solve(b_u, uh.vector)
-
+        
+        if i > 150 * step_per_timeframe:
+            uh.x.array[:] = np.where(uh.x.array-u_n.x.array > 0, u_n.x.array, uh.x.array)
+        
         u_n.x.array[:] = uh.x.array
         v_n.x.array[:] = v_n.x.array + dt * np.where(u_n.x.array < u_crit, (1 - v_n.x.array) / tau_open, -v_n.x.array / tau_close.x.array)
         u_data.append(u_n.x.array.copy())
@@ -167,10 +170,11 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
 
 if __name__ == "__main__":
     mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
+    step_per_timeframe = 4
     import time
     start_time = time.time()
-    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=False, T=1000, step_per_timeframe=4)
+    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, T=2000, step_per_timeframe=step_per_timeframe)
     end_time = time.time()
     print(f"Simulation time: {end_time - start_time} seconds")
     from utils.visualize_tools import plot_v_random
-    plot_v_random(v_data)
+    plot_v_random(v_data, step_per_timeframe=step_per_timeframe)
