@@ -5,7 +5,7 @@ import numpy as np
 from dolfinx.plot import vtk_mesh
 import pyvista
 
-from .helper_function import eval_function
+from .function_tools import eval_function
 
 def visualize_bullseye_points(theta, r, val):
     """在 bullseye 坐标上绘制点云分布"""
@@ -93,3 +93,44 @@ def plot_val_on_domain(domain, val, name="val", tdim=3, title="Value on Domain")
     plotter.view_yz()
     plotter.add_axes()
     plotter.show(auto_close=False)
+
+def plot_standard_12_lead(standard12Lead, step_per_timeframe=4):
+    fig, axs = plt.subplots(4, 3, figsize=(15, 10))
+    leads = [
+        "lead I", "lead II", "lead III", "lead V1", "lead V2", "lead V3",
+        "lead V4", "lead V5", "lead V6", "lead aVR", "lead aVL", "lead aVF"
+    ]
+
+    time = np.arange(0, standard12Lead.shape[0] / step_per_timeframe, 1 / step_per_timeframe)
+    for i, ax in enumerate(axs.flat):
+        ax.plot(time, standard12Lead[:, i])
+        ax.set_title(leads[i])
+        ax.set_xlabel('Time (ms)')
+        ax.set_ylabel('Potential (mV)')
+        ax.grid(True)
+
+    fig.suptitle('12-lead ECG', fontsize=16)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.show()
+
+def plot_bsp_on_standard12lead(bsp_data, lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1, step_per_timeframe=4):
+    from .helper_function import transfer_bsp_to_standard12lead
+
+    standard12Lead = transfer_bsp_to_standard12lead(bsp_data, lead_index)
+    plot_standard_12_lead(standard12Lead, step_per_timeframe=step_per_timeframe)
+
+def plot_v_random(v_data, step_per_timeframe=4):
+    num_v = v_data.shape[1]  # 获取 v 的数量
+    indices = np.random.choice(num_v, size=9, replace=False)
+    # indices = np.where(v_data[450*step_per_timeframe, :] > -89)[0]  # 只选择有激活的点
+
+    plt.figure(figsize=(12, 8))
+    time = np.arange(0, v_data.shape[0] / step_per_timeframe, 1 / step_per_timeframe)
+    for i, idx in enumerate(indices):
+        plt.plot(time, v_data[:, idx], label=f'v {idx}')
+    plt.title("Randomly Selected V Data")
+    plt.xlabel("Time")
+    plt.ylabel("V Values")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
