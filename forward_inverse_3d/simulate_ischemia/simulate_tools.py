@@ -153,3 +153,37 @@ def build_M(domain: Mesh, cell_markers, condition: Type[Callable], multi_flag, s
         else:
             M.interpolate(rho1, cell_markers.find(4))
     return M
+
+def get_activation_dict():
+    # activation_dict = {
+    #     8 : np.array([57, 51.2, 15]),
+        # 14.4 : np.array([30.2, 45.2, -30]),
+        # 14.5 : np.array([12.8, 54.2, -15]),
+        # 18.7 : np.array([59.4, 29.8, 15]),
+        # 23.5 : np.array([88.3, 41.2, -37.3]),
+        # 34.9 : np.array([69.1, 27.1, -30]),
+        # 45.6 : np.array([48.4, 40.2, -37.5])
+    # }
+    import h5py
+    geom = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
+    ventricle_pts = np.array(geom['geom_ventricle']['pts'])
+    right_cavity_pts = np.array(geom['geom_rcav']['pts'])
+    left_cavity_pts = np.array(geom['geom_lcav']['pts'])
+
+    activation_times = h5py.File(r'forward_inverse_3d/data/activation_times_ecgsim.mat', 'r')
+    activation = np.array(activation_times['dep']).reshape(-1)
+
+    assert ventricle_pts.shape[0] == activation.shape[0], \
+        "Number of ventricle points does not match number of activation times"
+    
+    assert np.unique(activation).shape[0] == activation.shape[0]
+
+    # create dict time -> coords
+    activation_dict = {}
+    for i in range(ventricle_pts.shape[0]):
+        time = activation[i]
+        coord = ventricle_pts[i]
+        if coord.tolist() in right_cavity_pts.tolist() or coord.tolist() in left_cavity_pts.tolist():
+           activation_dict[time] = coord
+    
+    return activation_dict

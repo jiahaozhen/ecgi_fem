@@ -10,15 +10,14 @@ from petsc4py import PETSc
 import numpy as np
 
 sys.path.append('.')
-from utils.helper_function import v_data_argument, compute_phi_with_v_timebased, find_vertex_with_coordinate, fspace2mesh
 from utils.function_tools import eval_function, assign_function
 from utils.ventricular_segmentation_tools import distinguish_epi_endo
-from forward_inverse_3d.simulate_ischemia.simulate_tools import build_tau_close, build_tau_in, build_D
+from forward_inverse_3d.simulate_ischemia.simulate_tools import build_tau_close, build_tau_in, build_D, get_activation_dict
 
 def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           ischemia_flag=False, scar_flag=False,
                                           center_ischemia=np.array([32.1, 71.7, 15]), 
-                                          radius_ischemia=30,
+                                          radius_ischemia=20,
                                           ischemia_epi_endo=[-1, 0, 1],
                                           u_peak_ischemia_val=0.9, u_rest_ischemia_val=0.1, tau=10,
                                           T=120, step_per_timeframe=10,
@@ -34,8 +33,6 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
     V = functionspace(subdomain_ventricle, ("Lagrange", 1))
     V_piecewise = functionspace(subdomain_ventricle, ("DG", 0))
-    functionspace2mesh = fspace2mesh(V)
-    mesh2functionspace = np.argsort(functionspace2mesh)
 
     t = 0
     num_steps = T * step_per_timeframe
@@ -72,6 +69,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     v_n = Function(V)
     uh = Function(V)
     J_stim = Function(V)
+    J_stim_plus = Function(V)
     if ischemia_flag:
         u_peak.interpolate(ischemia_condition(u_peak_ischemia_val, 1))
         u_rest.interpolate(ischemia_condition(u_rest_ischemia_val, 0))
@@ -84,11 +82,6 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         uh.interpolate(lambda x: np.full(x.shape[1], 0))
 
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
-
-    if isinstance(u_peak, Function):
-        ischemia_marker = np.where(np.abs(u_peak.x.array - u_peak_ischemia_val) < 1e-3, 1, 0)
-    else:
-        ischemia_marker = np.full(u_n.x.array.shape, 0)
     
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)
@@ -104,35 +97,58 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     solver.setOperators(A)
     solver.setType("cg")  # 改为共轭梯度法
     solver.getPC().setType("gamg")  # 或 "ilu", "gamg"
-    solver.setTolerances(rtol=1e-8)
+    solver.setTolerances(rtol=1e-6)
     
     b_u = create_vector(linear_form_u)
 
-    activation_dict = {
-        8 : np.array([57, 51.2, 15]),
-        14.4 : np.array([30.2, 45.2, -30]),
-        14.5 : np.array([12.8, 54.2, -15]),
-        18.7 : np.array([59.4, 29.8, 15]),
-        23.5 : np.array([88.3, 41.2, -37.3]),
-        34.9 : np.array([69.1, 27.1, -30]),
-        45.6 : np.array([48.4, 40.2, -37.5])
-    }
-    activation_dict = {k : find_vertex_with_coordinate(subdomain_ventricle, v) for k, v in activation_dict.items()}
+    # ---------------------------
+    # activation 座标（物理坐标）
+    # 保持原始字典的物理坐标定义，不再把它映射到单个 DOF/节点索引
+    activation_centers_original = get_activation_dict()
+    # 把时间转换为步数索引，但保留物理坐标作为激活中心
+    
+    activation_centers = { int(k * step_per_timeframe) : v for k, v in activation_centers_original.items() }
 
-    activation_dict = {int(k * step_per_timeframe) : mesh2functionspace[v] for k, v in activation_dict.items()}
+    # 刺激的物理半径和强度（你可以根据需要调整）
+    stim_radius = 5.0         # mm（或与网格同单位）----> 保持为物理长度，不随网格变化
+    stim_strength = 0.5       # A/m^3 或数值强度（与原来数值对齐）
 
-    last_time = 0
+    # ---------------------------
     u_data = []
     u_data.append(u_n.x.array.copy())
+    # 初始化激活计时器
+    activation_timers = {}
     for i in range(num_steps):
         t += dt
-        if i in activation_dict:
-            J_stim.x.array[activation_dict[i]] = 0.5
-            last_time = step_per_timeframe * 10
-        else:
-            last_time = last_time - 1
-            if last_time < 0:
-                J_stim.x.array[:] = np.zeros(J_stim.x.array.shape)
+
+        # 清零 J_stim
+        J_stim.x.array[:] = np.zeros(J_stim.x.array.shape)
+
+        # 检查是否有新的激活点
+        if i in activation_centers:
+            activation_timers[i] = 5 * step_per_timeframe
+
+        # 更新激活计时器并累加刺激电流
+        for key in list(activation_timers.keys()):
+            activation_timers[key] -= 1
+            if activation_timers[key] <= 0:
+                del activation_timers[key]
+            else:
+                center_coord = activation_centers[key].astype(float)
+
+                # interpolate 要求返回每个查询点的值（x 的形状为 (gdim, npoints)）
+                def stim_indicator(x, c=center_coord, r=stim_radius, s=stim_strength):
+                    # x: (gdim, npoints)
+                    pts = x.T  # (npoints, gdim)
+                    d2 = np.sum((pts - c)**2, axis=1)
+                    return np.where(d2 <= r**2, np.full(pts.shape[0], s), np.zeros(pts.shape[0]))
+
+                # 累加刺激电流
+                J_stim_plus.interpolate(stim_indicator)
+                J_stim.x.array[:] = J_stim.x.array + J_stim_plus.x.array
+                
+
+        # 组装并求解
         with b_u.localForm() as loc_b:
             loc_b.set(0)
         assemble_vector(b_u, linear_form_u)
@@ -141,16 +157,20 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         u_n.x.array[:] = uh.x.array
         v_n.x.array[:] = v_n.x.array + dt * np.where(u_n.x.array < u_crit, (1 - v_n.x.array) / tau_open, -v_n.x.array / tau_close.x.array)
         u_data.append(u_n.x.array.copy())
+
     u_data = np.array(u_data)
-    # u_data = np.where(u_data > 1, 1, u_data)
-    # u_data = np.where(u_data < 0, 0, u_data)
+    u_data = np.where(u_data > 1, 1, u_data)
+    u_data = np.where(u_data < 0, 0, u_data)
     u_data = u_data * (v_max - v_min) + v_min
-    phi_1, phi_2 = compute_phi_with_v_timebased(u_data, V, ischemia_marker)
-    if data_argument:
-        u_data = v_data_argument(phi_1, phi_2, tau=tau)
     
-    return u_data, phi_1, phi_2
+    return u_data, None, None
 
 if __name__ == "__main__":
     mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
-    compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, T=10)
+    import time
+    start_time = time.time()
+    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=False, T=1000, step_per_timeframe=4)
+    end_time = time.time()
+    print(f"Simulation time: {end_time - start_time} seconds")
+    from utils.visualize_tools import plot_v_random
+    plot_v_random(v_data)
