@@ -9,13 +9,14 @@ import pyvista
 import numpy as np
 # from main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
 # from main_reaction_diffusion import compute_v_based_on_reaction_diffusion
-from simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
+# from simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
+from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
 
 sys.path.append('.')
 from utils.helper_function import eval_function
 
 submesh_flag = True
-ischemia_flag = True
+ischemia_flag = False
 gdim = 3
 if gdim == 2:
     mesh_file = r'forward_inverse_2d/data/heart_torso.msh'
@@ -45,9 +46,10 @@ else:
     center_ischemia = np.array([89.1, 40.9, -13.3])
     radius_ischemia = 30
 
+step_per_timeframe = 4
 V = functionspace(subdomain_ventricle, ("Lagrange", 1))
 u = Function(V)
-u_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=ischemia_flag, ischemia_epi_endo=[1, 0, -1], step_per_timeframe=2)
+u_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=ischemia_flag, ischemia_epi_endo=[1, 0, -1], step_per_timeframe=step_per_timeframe)
 # u_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=ischemia_flag, surface_flag=True)
 # u_data, phi_1, phi_2 = compute_v_based_on_reaction_diffusion(
 #     mesh_file, T=T, submesh_flag=submesh_flag, ischemia_flag=ischemia_flag, 
@@ -74,7 +76,7 @@ else:
 plotter.open_gif(name)
 
 t = 0
-time_step = 0.1
+time_step = 1 / step_per_timeframe * 1.0  # assuming time unit is ms
 for i in range(u_data.shape[0]):
     u.x.array[:] = u_data[i]
     grid["u"] = eval_function(u, subdomain_ventricle.geometry.x)

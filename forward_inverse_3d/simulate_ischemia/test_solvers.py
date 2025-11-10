@@ -102,10 +102,10 @@ def plot_12_lead_comparison(results, lead_indices):
 
 if __name__ == "__main__":
     mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
-    T = 400
+    T = 500
     lead_indices = np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1  # 12 导联索引
 
-    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, T=T, step_per_timeframe=2)
+    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, T=T, step_per_timeframe=2)
 
     solver_configs = [
             {'type': 'cg', 'pc': 'hypre'},
