@@ -43,42 +43,17 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     marker_function = Function(V)
     assign_function(marker_function, np.arange(len(subdomain_ventricle.geometry.x)), epi_endo_marker)
 
-    class ischemia_condition():
-        def __init__(self, u_ischemia, u_healthy, center=center_ischemia, r=radius_ischemia, sigma=3):
-            self.u_ischemia = u_ischemia
-            self.u_healthy = u_healthy
-            self.center = center
-            self.r = r
-            self.sigma = sigma
-        def __call__(self, x):
-            marker_value = eval_function(marker_function, x.T).ravel()
-            distance = np.sqrt(np.sum((x.T - self.center)**2, axis=1))
-
-            # 只在选定层参与缺血（如 -1,0,1）
-            layer_mask = np.isin(marker_value.round(), ischemia_epi_endo)
-
-            # 高斯平滑权重 (0~1)，sigma 控制过渡宽度
-            # exp[-0.5*((d - r)/sigma)^2] → 软边界
-            smooth_mask = np.exp(-0.5 * ((distance - self.r) / self.sigma) ** 2)
-            smooth_mask[distance < self.r] = 1.0
-            smooth_mask[distance > self.r + 3 * self.sigma] = 0.0
-
-            # 只在目标层起效
-            smooth_mask *= layer_mask.astype(float)
-
-            # 输出连续电生理参数
-            ret_value = self.u_healthy + (self.u_ischemia - self.u_healthy) * smooth_mask
-
-            # ischemia_mask = (distance <= self.r) & layer_mask
-            # ret_value = np.where(ischemia_mask, self.u_ischemia, self.u_healthy)
-
-            return ret_value
+    condition = ischemia_condition(u_ischemia=1.0, u_healthy=0.0,
+                                   center=center_ischemia,
+                                   r=radius_ischemia,
+                                   marker_function=marker_function,
+                                   ischemia_epi_endo=ischemia_epi_endo)
     
-    D = build_D(V_piecewise, condition=ischemia_condition, scar=scar_flag, ischemia=ischemia_flag)
+    D = build_D(V_piecewise, condition=condition, scar=scar_flag, ischemia=ischemia_flag)
     tau_out = 10
     tau_open = 130
-    tau_close = build_tau_close(marker_function, ischemia_condition, ischemia=ischemia_flag, vary=tau_close_vary)
-    tau_in = build_tau_in(V, ischemia_condition, ischemia=ischemia_flag)
+    tau_close = build_tau_close(marker_function, condition, ischemia=ischemia_flag, vary=tau_close_vary)
+    tau_in = build_tau_in(V, condition, ischemia=ischemia_flag)
     u_crit = 0.13
 
     u_peak = Function(V)
@@ -89,10 +64,18 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     J_stim = Function(V)
     J_stim_plus = Function(V)
     if ischemia_flag:
-        u_peak.interpolate(ischemia_condition(u_peak_ischemia_val, 1))
-        u_rest.interpolate(ischemia_condition(u_rest_ischemia_val, 0))
-        u_n.interpolate(ischemia_condition(u_rest_ischemia_val, 0))
-        uh.interpolate(ischemia_condition(u_rest_ischemia_val, 0))
+        condition.u_ischemia = u_peak_ischemia_val
+        condition.u_healthy = 1.0
+        u_peak.interpolate(condition)
+        
+        condition.u_ischemia = u_rest_ischemia_val
+        condition.u_healthy = 0.0
+        u_rest.interpolate(condition)
+        u_n.interpolate(condition)
+        uh.interpolate(condition)
+
+        condition.u_ischemia = 1.0
+        condition.u_healthy = 0.0
     else:
         u_peak = 1
         u_rest = 0
