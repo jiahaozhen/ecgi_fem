@@ -117,11 +117,10 @@ def plot_standard_12_lead(standard12Lead, step_per_timeframe=4, filter_flag=True
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
-def compare_standard_12_lead(standard12Lead1, standard12Lead2, label1="Data 1", label2="Data 2", step_per_timeframe=4, filter_flag=True):
+def compare_standard_12_lead(*standard12Leads, labels=None, step_per_timeframe=4, filter_flag=True):
     if filter_flag:
         from .signal_processing_tools import smooth_ecg_mean
-        standard12Lead1 = smooth_ecg_mean(standard12Lead1, window_size=50)
-        standard12Lead2 = smooth_ecg_mean(standard12Lead2, window_size=50)
+        standard12Leads = [smooth_ecg_mean(data, window_size=50) for data in standard12Leads]
 
     fig, axs = plt.subplots(4, 3, figsize=(15, 10))
     leads = [
@@ -129,10 +128,12 @@ def compare_standard_12_lead(standard12Lead1, standard12Lead2, label1="Data 1", 
         "lead V4", "lead V5", "lead V6", "lead aVR", "lead aVL", "lead aVF"
     ]
 
-    time = np.arange(0, standard12Lead1.shape[0] / step_per_timeframe, 1 / step_per_timeframe)
+    time = np.arange(0, standard12Leads[0].shape[0] / step_per_timeframe, 1 / step_per_timeframe)
     for i, ax in enumerate(axs.flat):
-        ax.plot(time, standard12Lead1[:, i], label=label1)
-        ax.plot(time, standard12Lead2[:, i], linestyle='--', label=label2)
+        for idx, data in enumerate(standard12Leads):
+            label = labels[idx] if labels and idx < len(labels) else f"Data {idx + 1}"
+            linestyle = '-' if idx == 0 else '--'
+            ax.plot(time, data[:, i], linestyle=linestyle, label=label)
         ax.set_title(leads[i])
         ax.set_xlabel('Time (ms)')
         ax.set_ylabel('Potential (mV)')
