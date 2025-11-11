@@ -12,16 +12,16 @@ import numpy as np
 sys.path.append('.')
 from utils.function_tools import eval_function, assign_function
 from utils.ventricular_segmentation_tools import distinguish_epi_endo
-from forward_inverse_3d.simulate_ischemia.simulate_tools import build_tau_close, build_tau_in, build_D, get_activation_dict
+from forward_inverse_3d.simulate_ischemia.simulate_tools import build_tau_close, build_tau_in, build_D, get_activation_dict, ischemia_condition
 
 def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           ischemia_flag=False, scar_flag=False,
                                           center_ischemia=np.array([32.1, 71.7, 15]), 
                                           radius_ischemia=20,
                                           ischemia_epi_endo=[-1, 0, 1],
-                                          u_peak_ischemia_val=0.9, u_rest_ischemia_val=0.1, tau=10,
+                                          u_peak_ischemia_val=0.9, u_rest_ischemia_val=0.1,
                                           T=120, step_per_timeframe=10,
-                                          data_argument=False, v_min=-90, v_max=10,
+                                          v_min=-90, v_max=10,
                                           tau_close_vary=False):
     '''
     ischemia affect to D tau_close tau_in
@@ -44,16 +44,34 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     assign_function(marker_function, np.arange(len(subdomain_ventricle.geometry.x)), epi_endo_marker)
 
     class ischemia_condition():
-        def __init__(self, u_ischemia, u_healthy, center=center_ischemia, r=radius_ischemia):
+        def __init__(self, u_ischemia, u_healthy, center=center_ischemia, r=radius_ischemia, sigma=3):
             self.u_ischemia = u_ischemia
             self.u_healthy = u_healthy
             self.center = center
             self.r = r
+            self.sigma = sigma
         def __call__(self, x):
             marker_value = eval_function(marker_function, x.T).ravel()
-            distance_value = np.sum((x.T - self.center)**2, axis=1) - self.r**2
-            mask = (distance_value < 0) & np.isin(marker_value.round(), ischemia_epi_endo)
-            ret_value = np.where(mask, self.u_ischemia, self.u_healthy)
+            distance = np.sqrt(np.sum((x.T - self.center)**2, axis=1))
+
+            # 只在选定层参与缺血（如 -1,0,1）
+            layer_mask = np.isin(marker_value.round(), ischemia_epi_endo)
+
+            # 高斯平滑权重 (0~1)，sigma 控制过渡宽度
+            # exp[-0.5*((d - r)/sigma)^2] → 软边界
+            smooth_mask = np.exp(-0.5 * ((distance - self.r) / self.sigma) ** 2)
+            smooth_mask[distance < self.r] = 1.0
+            smooth_mask[distance > self.r + 3 * self.sigma] = 0.0
+
+            # 只在目标层起效
+            smooth_mask *= layer_mask.astype(float)
+
+            # 输出连续电生理参数
+            ret_value = self.u_healthy + (self.u_ischemia - self.u_healthy) * smooth_mask
+
+            # ischemia_mask = (distance <= self.r) & layer_mask
+            # ret_value = np.where(ischemia_mask, self.u_ischemia, self.u_healthy)
+
             return ret_value
     
     D = build_D(V_piecewise, condition=ischemia_condition, scar=scar_flag, ischemia=ischemia_flag)
