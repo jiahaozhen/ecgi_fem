@@ -94,7 +94,11 @@ def plot_val_on_domain(domain, val, name="val", tdim=3, title="Value on Domain")
     plotter.add_axes()
     plotter.show(auto_close=False)
 
-def plot_standard_12_lead(standard12Lead, step_per_timeframe=4):
+def plot_standard_12_lead(standard12Lead, step_per_timeframe=4, filter_flag=True):
+    if filter_flag:
+        from .signal_processing_tools import smooth_ecg_mean
+        standard12Lead = smooth_ecg_mean(standard12Lead, window_size=50)
+    
     fig, axs = plt.subplots(4, 3, figsize=(15, 10))
     leads = [
         "lead I", "lead II", "lead III", "lead V1", "lead V2", "lead V3",
@@ -113,7 +117,12 @@ def plot_standard_12_lead(standard12Lead, step_per_timeframe=4):
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
-def compare_standard_12_lead(standard12Lead1, standard12Lead2, label1="Data 1", label2="Data 2", step_per_timeframe=4):
+def compare_standard_12_lead(standard12Lead1, standard12Lead2, label1="Data 1", label2="Data 2", step_per_timeframe=4, filter_flag=True):
+    if filter_flag:
+        from .signal_processing_tools import smooth_ecg_mean
+        standard12Lead1 = smooth_ecg_mean(standard12Lead1, window_size=50)
+        standard12Lead2 = smooth_ecg_mean(standard12Lead2, window_size=50)
+
     fig, axs = plt.subplots(4, 3, figsize=(15, 10))
     leads = [
         "lead I", "lead II", "lead III", "lead V1", "lead V2", "lead V3",
