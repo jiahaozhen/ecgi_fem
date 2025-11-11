@@ -113,6 +113,27 @@ def plot_standard_12_lead(standard12Lead, step_per_timeframe=4):
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
+def compare_standard_12_lead(standard12Lead1, standard12Lead2, label1="Data 1", label2="Data 2", step_per_timeframe=4):
+    fig, axs = plt.subplots(4, 3, figsize=(15, 10))
+    leads = [
+        "lead I", "lead II", "lead III", "lead V1", "lead V2", "lead V3",
+        "lead V4", "lead V5", "lead V6", "lead aVR", "lead aVL", "lead aVF"
+    ]
+
+    time = np.arange(0, standard12Lead1.shape[0] / step_per_timeframe, 1 / step_per_timeframe)
+    for i, ax in enumerate(axs.flat):
+        ax.plot(time, standard12Lead1[:, i], label=label1)
+        ax.plot(time, standard12Lead2[:, i], linestyle='--', label=label2)
+        ax.set_title(leads[i])
+        ax.set_xlabel('Time (ms)')
+        ax.set_ylabel('Potential (mV)')
+        ax.legend()
+        ax.grid(True)
+
+    fig.suptitle('Comparison of 12-lead ECG', fontsize=16)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.show()
+
 def plot_bsp_on_standard12lead(bsp_data, lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1, step_per_timeframe=4):
     from .helper_function import transfer_bsp_to_standard12lead
 
