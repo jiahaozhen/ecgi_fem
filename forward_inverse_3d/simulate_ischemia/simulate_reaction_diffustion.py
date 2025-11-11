@@ -10,7 +10,7 @@ from petsc4py import PETSc
 import numpy as np
 
 sys.path.append('.')
-from utils.function_tools import eval_function, assign_function
+from utils.function_tools import assign_function
 from utils.ventricular_segmentation_tools import distinguish_epi_endo
 from forward_inverse_3d.simulate_ischemia.simulate_tools import build_tau_close, build_tau_in, build_D, get_activation_dict, ischemia_condition
 
@@ -22,7 +22,8 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           u_peak_ischemia_val=0.9, u_rest_ischemia_val=0.1,
                                           T=120, step_per_timeframe=10,
                                           v_min=-90, v_max=10,
-                                          tau_close_vary=False):
+                                          tau_close_vary=False,
+                                          affect_D=True, affect_tau_in=True, affect_tau_close=True):
     '''
     ischemia affect to D tau_close tau_in
     '''
@@ -49,11 +50,11 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                    marker_function=marker_function,
                                    ischemia_epi_endo=ischemia_epi_endo)
     
-    D = build_D(V_piecewise, condition=condition, scar=scar_flag, ischemia=ischemia_flag)
+    D = build_D(V_piecewise, condition=condition, scar=scar_flag and affect_D, ischemia=ischemia_flag and affect_D)
     tau_out = 10
     tau_open = 130
-    tau_close = build_tau_close(marker_function, condition, ischemia=ischemia_flag, vary=tau_close_vary)
-    tau_in = build_tau_in(V, condition, ischemia=ischemia_flag)
+    tau_close = build_tau_close(marker_function, condition, ischemia=ischemia_flag and affect_tau_close, vary=tau_close_vary)
+    tau_in = build_tau_in(V, condition, ischemia=ischemia_flag and affect_tau_in)
     u_crit = 0.13
 
     u_peak = Function(V)

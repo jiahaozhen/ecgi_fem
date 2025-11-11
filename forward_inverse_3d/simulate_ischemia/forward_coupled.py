@@ -22,7 +22,7 @@ def forward_tmp(mesh_file, v_data,
                 center_ischemia=np.array([32.1, 71.7, 15]), 
                 radius_ischemia=10, 
                 ischemia_epi_endo=[-1, 0, 1],
-                solver=None):  # 添加 solver 参数
+                solver=None, affect_Mi=True, affect_M=True):
     '''
     consider influence of ischemia or scar on forward simulation
     different conductivity in different regions
@@ -47,8 +47,13 @@ def forward_tmp(mesh_file, v_data,
                                    marker_function=marker_function,
                                    ischemia_epi_endo=ischemia_epi_endo)
 
-    Mi = build_Mi(subdomain_ventricle, condition, sigma_i=sigma_i, scar=scar_flag, ischemia=ischemia_flag)
-    M = build_M(domain, cell_markers, multi_flag=multi_flag, condition=condition, sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t, scar=scar_flag, ischemia=ischemia_flag)
+    Mi = build_Mi(subdomain_ventricle, condition, sigma_i=sigma_i, 
+                  scar=scar_flag and affect_Mi, 
+                  ischemia=ischemia_flag and affect_Mi)
+    M = build_M(domain, cell_markers, multi_flag=multi_flag, condition=condition, 
+                sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t, 
+                scar=scar_flag and affect_M, 
+                ischemia=ischemia_flag and affect_M)
 
     u = Function(V1)
     v = Function(V2)
@@ -96,14 +101,16 @@ def compute_d_from_tmp(mesh_file, v_data,
                        ischemia_flag=False, scar_flag=False, 
                        center_ischemia=np.array([32.1, 71.7, 15]), 
                        radius_ischemia=10, 
-                       ischemia_epi_endo=[-1, 0, 1]):
+                       ischemia_epi_endo=[-1, 0, 1],
+                       affect_Mi=True, affect_M=True):
     u_f_data, u_functionspace = forward_tmp(mesh_file, v_data, 
                                             sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t, 
                                             multi_flag=multi_flag, gdim=gdim,
                                             ischemia_flag=ischemia_flag, scar_flag=scar_flag, 
                                             center_ischemia=center_ischemia, 
                                             radius_ischemia=radius_ischemia, 
-                                            ischemia_epi_endo=ischemia_epi_endo)
+                                            ischemia_epi_endo=ischemia_epi_endo,
+                                            affect_Mi=affect_Mi, affect_M=affect_M)
     geom = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
     points = np.array(geom['geom_thorax']['pts'])
     d_data = extract_data_from_function(u_f_data, u_functionspace, points)
