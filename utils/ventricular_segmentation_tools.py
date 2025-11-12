@@ -5,7 +5,6 @@ import numpy as np
 
 from .helper_function import submesh_node_index, get_boundary_vertex_connectivity
 
-
 def distinguish_epi_endo(mesh_file: str, gdim: int) -> np.ndarray:
     """
     Distinguish epi and endo based on the mesh file.
@@ -40,6 +39,40 @@ def distinguish_epi_endo(mesh_file: str, gdim: int) -> np.ndarray:
     
     return epi_endo_marker.astype(np.int32)
 
+def distinguish_left_right_endo_epi(mesh_file: str, gdim: int) -> np.ndarray:
+    # mesh of Body
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    tdim = domain.topology.dim
+    # mesh of Heart
+    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+    subdomain_left_cavity, _, _, _ = create_submesh(domain, tdim, cell_markers.find(5))
+    subdomain_right_cavity, _, _, _ = create_submesh(domain, tdim, cell_markers.find(6))
+
+    # 1 epi 0 mid -1 left_endo -2 right_endo
+    marker = np.zeros(subdomain_ventricle.geometry.x.shape[0], dtype=np.int32)
+
+    ventricle_sub2parent = submesh_node_index(domain, cell_markers, 2)
+    ventricle_parent2sub = np.zeros(domain.geometry.x.shape[0], dtype=np.int32) - 1
+    ventricle_parent2sub[ventricle_sub2parent] = np.arange(len(ventricle_sub2parent))
+
+    left_cavity_sub2parent = submesh_node_index(domain, cell_markers, 5)
+    right_cavity_sub2parent = submesh_node_index(domain, cell_markers, 6)
+    ventricle_boundary = locate_entities_boundary(subdomain_ventricle, tdim-3, lambda x: np.full(x.shape[1], True, dtype=bool))
+    left_cavity_boundary = locate_entities_boundary(subdomain_left_cavity, tdim-3, lambda x: np.full(x.shape[1], True, dtype=bool))
+    right_cavity_boundary = locate_entities_boundary(subdomain_right_cavity, tdim-3, lambda x: np.full(x.shape[1], True, dtype=bool))
+
+    marker[ventricle_boundary] = 1
+    for i in range(len(left_cavity_boundary)):
+        node_index_in_ventricle = ventricle_parent2sub[left_cavity_sub2parent[left_cavity_boundary[i]]]
+        if node_index_in_ventricle != -1:
+            marker[node_index_in_ventricle] = -1
+    for i in range(len(right_cavity_boundary)):
+        node_index_in_ventricle = ventricle_parent2sub[right_cavity_sub2parent[right_cavity_boundary[i]]]
+        if node_index_in_ventricle != -1:
+            marker[node_index_in_ventricle] = -2
+    
+    return marker.astype(np.int32)
+
 def get_ring_pts(mesh_file: str, gdim: int) -> tuple[np.ndarray, np.ndarray]:
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
@@ -47,64 +80,78 @@ def get_ring_pts(mesh_file: str, gdim: int) -> tuple[np.ndarray, np.ndarray]:
 
     points = subdomain_ventricle.geometry.x
 
-    epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
+    marker = distinguish_left_right_endo_epi(mesh_file, gdim=gdim)
     boundary_vertices, adjacency = get_boundary_vertex_connectivity(subdomain_ventricle)
 
+    left_point_index = []
     ring_point_index = []
 
     for v in boundary_vertices:
         adjacency_list = adjacency[v]
-        marker = epi_endo_marker[v]
-        if marker != 1:
+        marker_val = marker[v]
+        if marker_val != 1:
             continue
         for v_n in adjacency_list:
-            if epi_endo_marker[v_n] == -marker:
+            if marker[v_n] == -1:
+                left_point_index.append(v_n)
+            if marker[v_n] == -2:
                 ring_point_index.append(v_n)
 
+    left_points = points[left_point_index]
     ring_points = points[ring_point_index]
 
-    return ring_point_index, ring_points
+    return left_point_index, ring_point_index, left_points, ring_points
 
-def distinguish_ring_pts(ring_points: np.ndarray):
-    from sklearn.cluster import DBSCAN
+def separate_lv_rv(mesh_file, gdim=3):
+    from scipy.spatial import cKDTree as KDTree
 
-    clustering = DBSCAN(eps=10, min_samples=1).fit(ring_points)  # eps 可调
-    labels = clustering.labels_
-    group1 = ring_points[labels == 0]
-    group2 = ring_points[labels == 1]
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    tdim = domain.topology.dim
+    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
 
-    x_mean1 = group1[:, 0].mean()
-    x_mean2 = group2[:, 0].mean()
+    marker = distinguish_left_right_endo_epi(mesh_file, gdim=gdim)
 
-    if x_mean1 < x_mean2:
-        mitral_ring = group1
-        tricuspid_ring = group2
+    coords = subdomain_ventricle.geometry.x
+    left_endo = coords[marker == -1]
+    right_endo = coords[marker == -2]
+
+    # compute min distances to left and right landmark sets (use KDTree if available)
+    # KDTree is available (imported above)
+
+    if left_endo.size == 0 and right_endo.size == 0:
+        return np.empty((0, coords.shape[1])), np.empty((0, coords.shape[1])), np.empty((0,), dtype=bool), np.empty((0,), dtype=bool)
+
+    if left_endo.size == 0:
+        return np.empty((0, coords.shape[1])), coords.copy(), np.empty((0,), dtype=bool), np.full((coords.shape[0],), True, dtype=bool)
+    if right_endo.size == 0:
+        return coords.copy(), np.empty((0, coords.shape[1])), np.full((coords.shape[0],), True, dtype=bool), np.empty((0,), dtype=bool)
+
+    if KDTree is not None:
+        tree_l = KDTree(left_endo)
+        tree_r = KDTree(right_endo)
+        d_left, _ = tree_l.query(coords)
+        d_right, _ = tree_r.query(coords)
     else:
-        mitral_ring = group2
-        tricuspid_ring = group1
+        # fallback: chunked pairwise computation to avoid huge memory usage
+        def min_dists(points, targets):
+            n = points.shape[0]
+            out = np.empty(n)
+            chunk = 10000
+            for i in range(0, n, chunk):
+                p = points[i:i+chunk]
+                diff = p[:, None, :] - targets[None, :, :]
+                d2 = np.sum(diff * diff, axis=2)
+                out[i:i+chunk] = np.sqrt(d2.min(axis=1))
+            return out
+        d_left = min_dists(coords, left_endo)
+        d_right = min_dists(coords, right_endo)
 
-    return mitral_ring, tricuspid_ring
+    # assign to side with smaller distance
+    left_mask = d_left < d_right
+    lv_points = coords[left_mask]
+    rv_points = coords[~left_mask]
 
-def separate_lv_rv(points, mitral_ring, tricuspid_ring, offset_ratio=0.25):
-    # 1. 环中心
-    cL = mitral_ring.mean(axis=0)
-    cR = tricuspid_ring.mean(axis=0)
-    
-    # 2. 连线方向单位向量
-    v = cR - cL
-    dist = np.linalg.norm(v)
-    v /= dist
-    
-    # 3. 分界平面中心（向右偏移）
-    cM = (cL + cR) / 2
-    cM_shift = cM + offset_ratio * dist * v  # 向右心室方向平移
-    
-    # 4. 点投影与分类
-    proj = np.dot(points - cM_shift, v)
-    lv_mask = proj < 0
-    rv_mask = ~lv_mask
-
-    return points[lv_mask], points[rv_mask], lv_mask, rv_mask
+    return lv_points, rv_points, left_mask, ~left_mask
 
 def get_apex_from_annulus_pts(vertices, annulus_pts):
     V = np.asarray(vertices)
@@ -189,17 +236,16 @@ def lv_17_segmentation_from_mesh(mesh_file: str, gdim: int = 3) -> np.ndarray:
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
     
     points = subdomain_ventricle.geometry.x
-    ring_point_indices, ring_points = get_ring_pts(mesh_file, gdim=gdim)
-    mitral_ring, tricuspid_ring = distinguish_ring_pts(ring_points)
+    left_ring_index, ring_ring_index, left_ring_pts, right_ring_pts = get_ring_pts(mesh_file, gdim=gdim)
     
-    lv_points, rv_points, lv_mask, rv_mask = separate_lv_rv(points, mitral_ring, tricuspid_ring)
+    lv_points, rv_points, lv_mask, rv_mask = separate_lv_rv(mesh_file, gdim=gdim)
     
-    apex_point = get_apex_from_annulus_pts(points, mitral_ring)
+    apex_point = get_apex_from_annulus_pts(lv_points, left_ring_pts)
     
-    segment_ids_lv, r_mapped, theta_mapped = lv_17_segmentation(lv_points, mitral_ring, apex_point)
+    segment_ids_lv, r_mapped, theta_mapped = lv_17_segmentation(lv_points, left_ring_pts, apex_point)
     
     segment_ids = np.zeros(points.shape[0], dtype=np.int32)
     segment_ids[lv_mask] = segment_ids_lv
     segment_ids[rv_mask] = -1  # RV points marked as -1
     
-    return segment_ids
+    return segment_ids, r_mapped, theta_mapped

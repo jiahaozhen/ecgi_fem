@@ -238,6 +238,7 @@ def compute_grad(u):
     return eval_function(grad_u_f, points)
 
 def submesh_node_index(domain, cell_markers, sub_tag):
+    # the idx of submesh node in parent mesh
     tdim = domain.topology.dim
     subdomain, sub_to_parent, _, _ = create_submesh(domain, tdim, cell_markers.find(sub_tag))
     subdomain_node_num = subdomain.topology.index_map(0).size_local
