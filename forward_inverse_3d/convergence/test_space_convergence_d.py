@@ -1,183 +1,26 @@
 import os
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import pearsonr
 from utils.helper_function import transfer_bsp_to_standard12lead
+from utils.visualize_tools import compare_standard_12_lead, plot_convergence
+from utils.error_metrics_tools import compute_convergence_metrics
 
 # =========================================================
 # 基础配置
 # =========================================================
 mesh_file_template = 'forward_inverse_3d/data/mesh/mesh_multi_conduct_lc_{}_lc_ratio_{}.msh'
-# lc_list = [20, 30, 40, 50, 60, 70, 80]
-# lc_ratio_list = [2, 3, 4, 5]
-lc_list = [20, 30]
-lc_ratio_list = [4]
+
+lc_list = [20, 40, 80, 160]
+lc_ratio_list = [5]
 
 # 9 个导联电极索引（转为 0-based）
 leadIndex = np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1
-
-# =========================================================
-# 指标计算函数
-# =========================================================
-def compute_metrics_for_lc(d_base, d_other):
-    """
-    计算单个 lc 和 lc_ratio 相对于基准的多指标相似性。
-    d_base, d_other: shape = (n_leads, n_time)
-    返回:
-        {
-          "corr": 平均皮尔逊相关,
-          "rmse": 均方根误差,
-          "rel_L2": 相对L2误差,
-          "peak_shift": 平均峰值时间偏移（采样点数）
-        }
-    """
-    n_leads = d_base.shape[1]
-    r_list, rmse_list, relL2_list, peak_shift_list = [], [], [], []
-
-    for i in range(n_leads):
-        x, y = d_base[:,i], d_other[:,i]
-
-        # 1. 皮尔逊相关系数
-        if np.std(x) == 0 or np.std(y) == 0:
-            r = np.nan
-        else:
-            r, _ = pearsonr(x, y)
-
-        # 2. RMSE
-        rmse = np.sqrt(np.mean((x - y) ** 2))
-
-        # 3. 相对L2误差
-        rel_L2 = np.linalg.norm(x - y) / (np.linalg.norm(x) + 1e-12)
-
-        # 4. 峰值时间偏移
-        peak_shift = np.argmax(y) - np.argmax(x)
-
-        r_list.append(r)
-        rmse_list.append(rmse)
-        relL2_list.append(rel_L2)
-        peak_shift_list.append(peak_shift)
-
-    metrics = {
-        "corr": np.nanmean(r_list),
-        "rmse": np.mean(rmse_list),
-        "rel_L2": np.mean(relL2_list),
-        "peak_shift": np.mean(np.abs(peak_shift_list))
-    }
-    return metrics
-
-# =========================================================
-# 主指标计算
-# =========================================================
-def compute_d_convergence_metrics(d_data_dict, base_lc=20, base_lc_ratio=1):
-    """
-    计算不同 lc 和 lc_ratio 下 BSP 信号相对基准的多指标相似度
-    """
-    base_d = d_data_dict[(base_lc, base_lc_ratio)]
-    summary = {}
-
-    print("\n=== Mesh Convergence Analysis ===")
-    for (lc, lc_ratio), d in sorted(d_data_dict.items()):
-        if (lc, lc_ratio) == (base_lc, base_lc_ratio):
-            continue
-
-        metrics = compute_metrics_for_lc(base_d, d)
-        summary[(lc, lc_ratio)] = metrics
-        print(
-            f"lc={lc:>3d}, lc_ratio={lc_ratio:>2d} vs base lc={base_lc}, lc_ratio={base_lc_ratio}: "
-            f"corr={metrics['corr']:.3f}, "
-            f"relL2={metrics['rel_L2']:.3e}, "
-            f"RMSE={metrics['rmse']:.4f}, "
-            f"Δt_peak={metrics['peak_shift']:.2f}"
-        )
-
-    return summary
-
-# =========================================================
-# 绘图函数
-# =========================================================
-def plot_convergence(summary, base_lc=20, base_lc_ratio=1):
-    """
-    绘制网格收敛性图（多指标）
-    """
-    lc_vals = [f"{lc}-{lc_ratio}" for lc, lc_ratio in sorted(summary.keys())]
-    corr_vals = [summary[key]['corr'] for key in sorted(summary.keys())]
-    relL2_vals = [summary[key]['rel_L2'] for key in sorted(summary.keys())]
-    rmse_vals = [summary[key]['rmse'] for key in sorted(summary.keys())]
-    peak_shift_vals = [summary[key]['peak_shift'] for key in sorted(summary.keys())]
-
-    fig, axs = plt.subplots(2, 2, figsize=(12, 8))
-    axs = axs.flatten()
-
-    axs[0].plot(lc_vals, corr_vals, 'o-', label='Correlation (r)')
-    axs[0].set_title(f"Mean Correlation vs lc-lc_ratio (base lc={base_lc}, lc_ratio={base_lc_ratio})")
-    axs[0].set_xlabel("lc-lc_ratio")
-    axs[0].set_ylabel("Correlation (r)")
-    axs[0].grid(True)
-
-    axs[1].plot(lc_vals, relL2_vals, 's--', color='tab:red', label='Relative L2 Error')
-    axs[1].set_title("Relative L2 Error vs lc-lc_ratio")
-    axs[1].set_xlabel("lc-lc_ratio")
-    axs[1].set_ylabel("Relative L2 Error")
-    axs[1].grid(True)
-
-    axs[2].plot(lc_vals, rmse_vals, 'd--', color='tab:orange', label='RMSE')
-    axs[2].set_title("RMSE vs lc-lc_ratio")
-    axs[2].set_xlabel("lc-lc_ratio")
-    axs[2].set_ylabel("RMSE")
-    axs[2].grid(True)
-
-    axs[3].plot(lc_vals, peak_shift_vals, 'x-', color='tab:green', label='Peak Shift')
-    axs[3].set_title("Peak Time Shift vs lc-lc_ratio")
-    axs[3].set_xlabel("lc-lc_ratio")
-    axs[3].set_ylabel("Δt_peak (samples)")
-    axs[3].grid(True)
-
-    for ax in axs:
-        ax.legend()
-    plt.tight_layout()
-    plt.show()
-
-# =========================================================
-# 绘制十二导联叠加图
-# =========================================================
-def plot_12lead(d_data_dict):
-    """
-    绘制十二导联叠加图，不同 lc 和 lc_ratio 的数据叠加。
-    
-    参数：
-        d_data_dict: dict, 包含不同 lc 和 lc_ratio 的数据
-        leadIndex: list, 导联索引
-        step_per_timeframe: int, 每时间帧的步长
-    """
-    leads = [
-        "lead I", "lead II", "lead III", "lead V1", "lead V2", "lead V3",
-        "lead V4", "lead V5", "lead V6", "lead aVR", "lead aVL", "lead aVF"
-    ]
-
-    fig, axs = plt.subplots(4, 3, figsize=(15, 10))
-    axs = axs.flatten()
-
-    for i, ax in enumerate(axs):
-        for (lc, lc_ratio), d_data in sorted(d_data_dict.items()):
-            time = np.arange(0, d_data.shape[0], 1)
-            ax.plot(time, d_data[:,i], label=f"lc={lc}, lc_ratio={lc_ratio}")
-
-        ax.set_title(leads[i])
-        ax.set_xlabel("Time (ms)")
-        ax.set_ylabel("Potential (mV)")
-        ax.grid(True)
-        ax.legend(fontsize="small")
-
-    fig.suptitle("12-lead ECG", fontsize=16)
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    plt.show()
 
 # =========================================================
 # 主程序
 # =========================================================
 if __name__ == "__main__":
     # 更新后的文件路径
-    filename_template = 'forward_inverse_3d/data/results_lc_{lc}_ratio_{lc_ratio}.npz'
+    filename_template = 'forward_inverse_3d/data/convergence_results/results_lc_{}_ratio_{}.npz'
 
     d_data_dict = {}
 
@@ -185,7 +28,7 @@ if __name__ == "__main__":
     base_lc, base_lc_ratio = None, None
     for lc in sorted(lc_list):
         for lc_ratio in sorted(lc_ratio_list, reverse=True):
-            filename = filename_template.format(lc=lc, lc_ratio=lc_ratio)
+            filename = filename_template.format(lc, lc_ratio)
             if os.path.exists(filename):
                 base_lc, base_lc_ratio = lc, lc_ratio
                 break
@@ -201,7 +44,7 @@ if __name__ == "__main__":
     # 加载每个 lc 和 lc_ratio 的数据
     for lc in lc_list:
         for lc_ratio in lc_ratio_list:
-            filename = filename_template.format(lc=lc, lc_ratio=lc_ratio)
+            filename = filename_template.format(lc, lc_ratio)
             try:
                 data = np.load(filename)
                 d_data_dict[(lc, lc_ratio)] = transfer_bsp_to_standard12lead(data['d_data'], leadIndex)  # 确保数据格式正确
@@ -215,8 +58,18 @@ if __name__ == "__main__":
         exit()
 
     # 计算指标并绘图
-    metrics_summary = compute_d_convergence_metrics(d_data_dict, base_lc=base_lc, base_lc_ratio=base_lc_ratio)
-    plot_convergence(metrics_summary, base_lc=base_lc, base_lc_ratio=base_lc_ratio)
+    metrics_summary = compute_convergence_metrics(d_data_dict, base_lc=base_lc, base_lc_ratio=base_lc_ratio)
 
-    # 绘制十二导联叠加图
-    plot_12lead(d_data_dict)
+    import multiprocessing
+
+    p1 = multiprocessing.Process(target=plot_convergence, args=(metrics_summary, base_lc, base_lc_ratio))
+    p2 = multiprocessing.Process(target=compare_standard_12_lead, args=(*d_data_dict.values(),), kwargs={
+        'labels': [f"lc={lc}, ratio={lc_ratio}" for (lc, lc_ratio) in sorted(d_data_dict.keys())],
+        'step_per_timeframe': 16,
+        'filter_flag': False
+    })
+    p1.start()
+    p2.start()
+
+    p1.join()
+    p2.join()
