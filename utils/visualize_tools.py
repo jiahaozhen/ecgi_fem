@@ -180,3 +180,45 @@ def plot_v_random(v_data, step_per_timeframe=4):
     plt.legend()
     plt.grid(True)
     plt.show()
+
+def plot_convergence(summary, base_lc=20, base_lc_ratio=1):
+    """
+    绘制网格收敛性图（多指标）
+    """
+    lc_vals = [f"{lc}-{lc_ratio}" for lc, lc_ratio in sorted(summary.keys())]
+    corr_vals = [summary[key]['corr'] for key in sorted(summary.keys())]
+    relL2_vals = [summary[key]['rel_L2'] for key in sorted(summary.keys())]
+    rmse_vals = [summary[key]['rmse'] for key in sorted(summary.keys())]
+    peak_shift_vals = [summary[key]['peak_shift'] for key in sorted(summary.keys())]
+
+    fig, axs = plt.subplots(2, 2, figsize=(12, 8))
+    axs = axs.flatten()
+
+    axs[0].plot(lc_vals, corr_vals, 'o-', label='Correlation (r)')
+    axs[0].set_title(f"Mean Correlation vs lc-lc_ratio (base lc={base_lc}, lc_ratio={base_lc_ratio})")
+    axs[0].set_xlabel("lc-lc_ratio")
+    axs[0].set_ylabel("Correlation (r)")
+    axs[0].grid(True)
+
+    axs[1].plot(lc_vals, relL2_vals, 's--', color='tab:red', label='Relative L2 Error')
+    axs[1].set_title("Relative L2 Error vs lc-lc_ratio")
+    axs[1].set_xlabel("lc-lc_ratio")
+    axs[1].set_ylabel("Relative L2 Error")
+    axs[1].grid(True)
+
+    axs[2].plot(lc_vals, rmse_vals, 'd--', color='tab:orange', label='RMSE')
+    axs[2].set_title("RMSE vs lc-lc_ratio")
+    axs[2].set_xlabel("lc-lc_ratio")
+    axs[2].set_ylabel("RMSE")
+    axs[2].grid(True)
+
+    axs[3].plot(lc_vals, peak_shift_vals, 'x-', color='tab:green', label='Peak Shift')
+    axs[3].set_title("Peak Time Shift vs lc-lc_ratio")
+    axs[3].set_xlabel("lc-lc_ratio")
+    axs[3].set_ylabel("Δt_peak (samples)")
+    axs[3].grid(True)
+
+    for ax in axs:
+        ax.legend()
+    plt.tight_layout()
+    plt.show()

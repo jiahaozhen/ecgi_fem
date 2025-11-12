@@ -1,8 +1,7 @@
-import os
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import pearsonr
 from utils.helper_function import transfer_bsp_to_standard12lead
+from utils.error_metrics_tools import compute_metrics_for_timestep
 
 # =========================================================
 # 基础配置
@@ -11,41 +10,6 @@ result_file_template = 'forward_inverse_3d/data/convergence_results/results_time
 timestep_list = [2, 4, 8, 16]
 T = 500
 leadIndex = np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1
-
-# =========================================================
-# 指标计算函数
-# =========================================================
-def compute_metrics_for_timestep(d_base, d_other):
-    """
-    计算单个时间步长相对于基准的相关系数。
-    d_base, d_other: shape = (n_leads, n_time)
-    返回:
-        {
-          "corr": 平均皮尔逊相关
-        }
-    """
-    n_leads = d_base.shape[1]
-    r_list = []
-
-    for i in range(n_leads):
-        x, y = d_base[:, i], d_other[:, i]
-
-        # 对齐时间序列长度并进行伸缩
-        if len(x) != len(y):
-            x = np.interp(np.linspace(0, 1, len(y)), np.linspace(0, 1, len(x)), x)
-
-        # 计算皮尔逊相关系数
-        if np.std(x) == 0 or np.std(y) == 0:
-            r = np.nan
-        else:
-            r, _ = pearsonr(x, y)
-
-        r_list.append(r)
-
-    metrics = {
-        "corr": np.nanmean(r_list)
-    }
-    return metrics
 
 def compute_timestep_convergence_metrics(data_dict, base_timestep):
     """
@@ -109,7 +73,7 @@ def plot_convergence_comparison(v_summary, d_summary, base_timestep):
     plt.tight_layout()
     plt.show()
 
-def plot_12lead_comparison(d_data_dict, base_timestep=20):
+def plot_12lead_comparison(d_data_dict):
     """
     绘制十二导联叠加图，不同时间步长的数据叠加。
 
@@ -195,8 +159,13 @@ if __name__ == "__main__":
             f"corr={metrics['corr']:.3f}"
         )
 
-    # 绘制 v_data 和 d_data 的收敛性图
-    plot_convergence_comparison(v_metrics_summary, d_metrics_summary, base_timestep=base_timestep)
+    import multiprocessing
 
-    # 绘制十二导联叠加图
-    plot_12lead_comparison(d_data_12lead_dict, base_timestep=base_timestep)
+    p1 = multiprocessing.Process(target=plot_convergence_comparison, args=(v_metrics_summary, d_metrics_summary, base_timestep))
+    p2 = multiprocessing.Process(target=plot_12lead_comparison, args=(d_data_dict, ))
+    
+    p1.start()
+    p2.start()
+
+    p1.join()
+    p2.join()
