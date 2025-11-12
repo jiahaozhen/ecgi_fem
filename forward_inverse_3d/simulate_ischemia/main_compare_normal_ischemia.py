@@ -57,8 +57,7 @@ p1 = multiprocessing.Process(target=plot_val_on_mesh,
                                      "f_val_flag": True})
 p2 = multiprocessing.Process(target=compare_standard_12_lead, 
                              args=(standard12Lead_normal, standard12Lead_ischemia), 
-                             kwargs={"label1": "normal", 
-                                     "label2": "ischemia", 
+                             kwargs={'labels': ['Normal', 'Ischemia'],
                                      "step_per_timeframe": step_per_timeframe})
 p1.start()
 p2.start()

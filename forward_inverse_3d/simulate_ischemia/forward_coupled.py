@@ -19,9 +19,9 @@ def forward_tmp(mesh_file, v_data,
                 sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
                 multi_flag=True, gdim=3, 
                 ischemia_flag=False, scar_flag=False, 
-                center_ischemia=np.array([32.1, 71.7, 15]), 
-                radius_ischemia=10, 
-                ischemia_epi_endo=[-1, 0, 1],
+                center_ischemia=np.array([80.4, 19.7, -15.0]), 
+                radius_ischemia=30, 
+                ischemia_epi_endo=[-1],
                 solver=None, affect_Mi=True, affect_M=True):
     '''
     consider influence of ischemia or scar on forward simulation
@@ -133,4 +133,5 @@ if __name__ == "__main__":
     end_time = time.time()
     print(f"Forward TMP to BSP simulation time: {end_time - start_time} seconds")
     from utils.visualize_tools import plot_bsp_on_standard12lead
-    plot_bsp_on_standard12lead(d_data, step_per_timeframe=step_per_timeframe)
+    plot_bsp_on_standard12lead(d_data, step_per_timeframe=step_per_timeframe,
+                               filter_flag=True, filter_window_size=step_per_timeframe*10)

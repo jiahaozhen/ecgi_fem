@@ -2,6 +2,7 @@ import numpy as np
 from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
 from forward_inverse_3d.simulate_ischemia.forward_coupled import compute_d_from_tmp
 from utils.visualize_tools import compare_standard_12_lead
+from utils.helper_function import transfer_bsp_to_standard12lead
 
 def test_D_tau_Mi_Me_effect():
     mesh_file = 'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
@@ -37,15 +38,19 @@ def test_D_tau_Mi_Me_effect():
             mesh_file,
             v_data,
             ischemia_flag=True,
-            scar_flag=False,
             affect_Mi=params['affect_Mi'],
             affect_M=params['affect_M']
         )
-        results.append(d_data)
-        labels.append(f"Case {i+1}")
+        stand_12_lead = transfer_bsp_to_standard12lead(d_data, 
+                                                       lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1)
+        results.append(stand_12_lead)
+        labels.append(params['case'])
 
     # Compare results using the visualization tool
-    compare_standard_12_lead(*results, labels=labels, step_per_timeframe=step_per_timeframe)
+    compare_standard_12_lead(*results, 
+                             labels=labels, 
+                             step_per_timeframe=step_per_timeframe, 
+                             filter_flag=False)
 
 if __name__ == "__main__":
     test_D_tau_Mi_Me_effect()

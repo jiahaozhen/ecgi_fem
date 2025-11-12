@@ -94,10 +94,13 @@ def plot_val_on_domain(domain, val, name="val", tdim=3, title="Value on Domain")
     plotter.add_axes()
     plotter.show(auto_close=False)
 
-def plot_standard_12_lead(standard12Lead, step_per_timeframe=4, filter_flag=True):
+def plot_standard_12_lead(standard12Lead, 
+                          step_per_timeframe=4, 
+                          filter_flag=True, 
+                          filter_window_size=50):
     if filter_flag:
         from .signal_processing_tools import smooth_ecg_mean
-        standard12Lead = smooth_ecg_mean(standard12Lead, window_size=50)
+        standard12Lead = smooth_ecg_mean(standard12Lead, window_size=filter_window_size)
     
     fig, axs = plt.subplots(4, 3, figsize=(15, 10))
     leads = [
@@ -117,10 +120,14 @@ def plot_standard_12_lead(standard12Lead, step_per_timeframe=4, filter_flag=True
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
-def compare_standard_12_lead(*standard12Leads, labels=None, step_per_timeframe=4, filter_flag=True):
+def compare_standard_12_lead(*standard12Leads, 
+                             labels=None, 
+                             step_per_timeframe=4, 
+                             filter_flag=True,
+                             filter_window_size=50):
     if filter_flag:
         from .signal_processing_tools import smooth_ecg_mean
-        standard12Leads = [smooth_ecg_mean(data, window_size=50) for data in standard12Leads]
+        standard12Leads = [smooth_ecg_mean(data, window_size=filter_window_size) for data in standard12Leads]
 
     fig, axs = plt.subplots(4, 3, figsize=(15, 10))
     leads = [
@@ -144,11 +151,19 @@ def compare_standard_12_lead(*standard12Leads, labels=None, step_per_timeframe=4
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
-def plot_bsp_on_standard12lead(bsp_data, lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1, step_per_timeframe=4):
+def plot_bsp_on_standard12lead(bsp_data, 
+                               lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1, 
+                               step_per_timeframe=4,
+                               filter_flag=True,
+                               filter_window_size=50):
     from .helper_function import transfer_bsp_to_standard12lead
 
     standard12Lead = transfer_bsp_to_standard12lead(bsp_data, lead_index)
-    plot_standard_12_lead(standard12Lead, step_per_timeframe=step_per_timeframe)
+    plot_standard_12_lead(standard12Lead, 
+                          step_per_timeframe=step_per_timeframe,
+                          filter_flag=filter_flag,
+                          filter_window_size=filter_window_size
+                          )
 
 def plot_v_random(v_data, step_per_timeframe=4):
     num_v = v_data.shape[1]  # 获取 v 的数量
