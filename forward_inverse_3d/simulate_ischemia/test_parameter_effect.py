@@ -4,6 +4,8 @@ from forward_inverse_3d.simulate_ischemia.forward_coupled import compute_d_from_
 from utils.visualize_tools import compare_standard_12_lead
 from utils.helper_function import transfer_bsp_to_standard12lead
 
+save_path = 'forward_inverse_3d/data/simulate_ischemia/test_parameter_effect_results.npz'
+
 def test_D_tau_Mi_Me_effect():
     mesh_file = 'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
     step_per_timeframe = 4
@@ -45,12 +47,21 @@ def test_D_tau_Mi_Me_effect():
                                                        lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1)
         results.append(stand_12_lead)
         labels.append(params['case'])
-
-    # Compare results using the visualization tool
-    compare_standard_12_lead(*results, 
-                             labels=labels, 
-                             step_per_timeframe=step_per_timeframe, 
-                             filter_flag=False)
+    
+    np.savez(save_path,
+             results=results,
+             labels=labels)
 
 if __name__ == "__main__":
-    test_D_tau_Mi_Me_effect()
+    import os
+    if not os.path.exists(save_path):
+        test_D_tau_Mi_Me_effect()
+        
+    data = np.load(save_path, allow_pickle=True)
+    results = data['results']
+    labels = data['labels'].tolist()
+    step_per_timeframe = 4  # Ensure this matches the value used during testing
+    compare_standard_12_lead(*results,
+                             labels=labels,
+                             step_per_timeframe=step_per_timeframe,
+                             filter_flag=True)

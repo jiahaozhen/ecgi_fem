@@ -48,6 +48,14 @@ leadIndex = np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1
 standard12Lead_ischemia = transfer_bsp_to_standard12lead(d_data_ischemia, leadIndex)
 standard12Lead_normal = transfer_bsp_to_standard12lead(d_data_normal, leadIndex)
 
+np.savez(r'forward_inverse_3d/data/simulate_ischemia/compare_normal_ischemia.npz',
+         v_data_ischemia=v_data_ischemia,
+         d_data_ischemia=d_data_ischemia,
+         v_data_normal=v_data_normal,
+         d_data_normal=d_data_normal,
+         standard12Lead_ischemia=standard12Lead_ischemia,
+         standard12Lead_normal=standard12Lead_normal)
+
 import multiprocessing
 p1 = multiprocessing.Process(target=plot_val_on_mesh, 
                              args=(mesh_file, v_data_ischemia[0]), 
