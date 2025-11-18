@@ -222,3 +222,43 @@ def plot_convergence(summary, base_lc=20, base_lc_ratio=1):
         ax.legend()
     plt.tight_layout()
     plt.show()
+
+def plot_triangle_mesh(points, triangles, point_values=None, cell_values=None, title=None):
+
+    points = np.asarray(points, dtype=float)
+    triangles = np.asarray(triangles, dtype=np.int64)
+
+    # 2D → 自动扩展到 3D
+    if points.shape[1] == 2:
+        pts3d = np.c_[points, np.zeros(points.shape[0])]
+    else:
+        pts3d = points
+
+    # PyVista cells 格式
+    cells = np.hstack([np.c_[np.full(len(triangles), 3), triangles]]).ravel().astype(np.int64)
+    celltypes = np.full(len(triangles), 5, dtype=np.uint8)  # VTK_TRIANGLE=5
+
+    mesh = pyvista.UnstructuredGrid(cells, celltypes, pts3d)
+
+    # -------- 在 mesh 之上赋值 --------
+    if point_values is not None:
+        mesh.point_data["point_val"] = np.asarray(point_values, dtype=float)
+
+    if cell_values is not None:
+        mesh.cell_data["cell_val"] = np.asarray(cell_values, dtype=float)
+
+    # -------- 绘制 --------
+    p = pyvista.Plotter()
+
+    if point_values is not None:
+        p.add_mesh(mesh, scalars="point_val", show_edges=True)
+    elif cell_values is not None:
+        p.add_mesh(mesh, scalars="cell_val", show_edges=True)
+    else:
+        p.add_mesh(mesh, show_edges=True, color="lightgray")
+
+    if title is not None:
+        p.add_title(title)
+
+    p.add_axes()
+    p.show()
