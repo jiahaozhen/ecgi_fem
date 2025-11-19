@@ -1,27 +1,11 @@
-import sys
-
 import numpy as np
 from dolfinx.fem import Function, functionspace
 from dolfinx.mesh import Mesh
-
-sys.path.append('.')
 from utils.function_tools import eval_function
 
 MARKER_EPI = 1
 MARKER_MID = 0
 MARKER_ENDO = -1
-
-TAU_CLOSE_EPI = 145
-TAU_CLOSE_MID = 150
-TAU_CLOSE_ENDO = 155
-TAU_CLOSE_SHIFT = 20
-
-TAU_IN = 0.4
-TAU_IN_ISCHEMIA = 0.3
-
-D_VAL = 1e-1
-D_VAL_ISCHEMIA = 5e-2
-D_VAL_SCAR = 0
 
 MI_ISCHEMIA_FACTOR = 0.9
 MI_SCAR_FACTOR = 0.0
@@ -65,40 +49,51 @@ class ischemia_condition():
 
         return ret_value
 
-def build_tau_close(marker_function: Function, condition: ischemia_condition, ischemia=False, vary=False):
+def build_tau_close(marker_function: Function, 
+                    condition: ischemia_condition, 
+                    ischemia=False, 
+                    vary=False,
+                    tau_close_endo=155,
+                    tau_close_mid=150,
+                    tau_close_epi=145,
+                    tau_close_shift=20):
     f_space = marker_function.function_space
     tau_close = Function(f_space)
 
     if vary:
         marker_f = marker_function.x.array.round()
         tau_close.x.array[:] = np.where(marker_f == MARKER_EPI,
-                                        TAU_CLOSE_EPI,
+                                        tau_close_epi,
                                         np.where(marker_f == MARKER_MID,
-                                                 TAU_CLOSE_MID,
-                                                 TAU_CLOSE_ENDO))
+                                                 tau_close_mid,
+                                                 tau_close_endo))
     else:
-        tau_close.x.array[:] = TAU_CLOSE_MID
+        tau_close.x.array[:] = tau_close_mid
 
     if ischemia:
         coords = f_space.tabulate_dof_coordinates().T
 
         mask = condition(coords)
-        tau_close.x.array[:] = tau_close.x.array + TAU_CLOSE_SHIFT * mask
+        tau_close.x.array[:] = tau_close.x.array + tau_close_shift * mask
 
     return tau_close
 
 
-def build_tau_in(f_space: functionspace, condition: ischemia_condition, ischemia=False):
+def build_tau_in(f_space: functionspace, 
+                 condition: ischemia_condition, 
+                 ischemia=False,
+                 tau_in_val=0.4,
+                 tau_in_ischemia=1):
     tau_in = Function(f_space)
 
     if ischemia:
-        condition.u_ischemia = TAU_IN_ISCHEMIA
-        condition.u_healthy = TAU_IN
+        condition.u_ischemia = tau_in_ischemia
+        condition.u_healthy = tau_in_val
         coords = f_space.tabulate_dof_coordinates().T
         tau_in_smooth = condition(coords)
         tau_in.x.array[:] = tau_in_smooth
     else:
-        tau_in.x.array[:] = TAU_IN
+        tau_in.x.array[:] = tau_in_val
 
     condition.u_ischemia = 1.0
     condition.u_healthy = 0.0
@@ -106,22 +101,25 @@ def build_tau_in(f_space: functionspace, condition: ischemia_condition, ischemia
     return tau_in
 
 
-def build_D(f_space: functionspace, condition: ischemia_condition, scar=False, ischemia=False):
+def build_D(f_space: functionspace, 
+            condition: ischemia_condition, 
+            scar=False, ischemia=False,
+            D_val=1e-1, D_val_ischemia=5e-2, D_val_scar=0):
     D = Function(f_space)
     coords = f_space.tabulate_dof_coordinates().T
 
     if scar:
-        condition.u_ischemia = D_VAL_SCAR
-        condition.u_healthy = D_VAL
+        condition.u_ischemia = D_val_scar
+        condition.u_healthy = D_val
         D_smooth = condition(coords)
         D.x.array[:] = D_smooth
     elif ischemia:
-        condition.u_ischemia = D_VAL_ISCHEMIA
-        condition.u_healthy = D_VAL
+        condition.u_ischemia = D_val_ischemia
+        condition.u_healthy = D_val
         D_smooth = condition(coords)
         D.x.array[:] = D_smooth
     else:
-        D.x.array[:] = D_VAL
+        D.x.array[:] = D_val
 
     condition.u_ischemia = 1.0
     condition.u_healthy = 0.0
@@ -129,7 +127,10 @@ def build_D(f_space: functionspace, condition: ischemia_condition, scar=False, i
     return D
 
 
-def build_Mi(domain: Mesh, condition: ischemia_condition, sigma_i=0.4, scar=False, ischemia=False):
+def build_Mi(domain: Mesh, 
+             condition: ischemia_condition, 
+             sigma_i=0.4, 
+             scar=False, ischemia=False):
     tdim = domain.topology.dim
     f_space = functionspace(domain, ("DG", 0, (tdim, tdim)))
     coords = f_space.tabulate_dof_coordinates().T
@@ -152,7 +153,11 @@ def build_Mi(domain: Mesh, condition: ischemia_condition, sigma_i=0.4, scar=Fals
     Mi.x.array[:] = values.flatten(order='F')
     return Mi
 
-def build_Me(domain: Mesh, condition: ischemia_condition, sigma_e=0.8, scar=False, ischemia=False):
+
+def build_Me(domain: Mesh, 
+             condition: ischemia_condition, 
+             sigma_e=0.8, 
+             scar=False, ischemia=False):
     tdim = domain.topology.dim
     f_space = functionspace(domain, ("DG", 0, (tdim, tdim)))
     coords = f_space.tabulate_dof_coordinates().T
@@ -175,7 +180,12 @@ def build_Me(domain: Mesh, condition: ischemia_condition, sigma_e=0.8, scar=Fals
     Me.x.array[:] = values.flatten(order='F')
     return Me
 
-def build_M(domain: Mesh, cell_markers, condition: ischemia_condition, multi_flag, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, scar=False, ischemia=False):
+
+def build_M(domain: Mesh, 
+            cell_markers, multi_flag,
+            condition: ischemia_condition, 
+            sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
+            scar=False, ischemia=False):
     tdim = domain.topology.dim
     f_space = functionspace(domain, ("DG", 0, (tdim, tdim)))
     M = Function(f_space)
@@ -228,21 +238,32 @@ def build_M(domain: Mesh, cell_markers, condition: ischemia_condition, multi_fla
             M.interpolate(rho1, cell_markers.find(4))
     return M
 
-def get_activation_dict():
-    # activation_dict = {
-        # 8 : np.array([57, 51.2, 15]),
-        # 14.4 : np.array([30.2, 45.2, -30]),
-        # 14.5 : np.array([12.8, 54.2, -15]),
-        # 18.7 : np.array([59.4, 29.8, 15]),
-        # 23.5 : np.array([88.3, 41.2, -37.3]),
-        # 34.9 : np.array([69.1, 27.1, -30]),
-        # 45.6 : np.array([48.4, 40.2, -37.5])
-    # }
+
+def get_activation_dict(mesh_file, target_marker=2, gdim=3, mode='ENDO', threshold=100):
+
+    from dolfinx.io import gmshio
+    from mpi4py import MPI
+    from dolfinx.mesh import create_submesh
+
+    # mesh of Body
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    tdim = domain.topology.dim
+    # mesh of Heart
+    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(target_marker))
+
+    if mode == 'FULL':
+        target_coords = subdomain_ventricle.geometry.x
+    elif mode == 'ENDO':
+        from utils.ventricular_segmentation_tools import distinguish_epi_endo
+        epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
+        endo_idx = np.where(np.isclose(epi_endo_marker, -1.0))[0]
+        target_coords = subdomain_ventricle.geometry.x[endo_idx, :]
+    else:
+        target_coords = None
+
     import h5py
     geom = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
     ventricle_pts = np.array(geom['geom_ventricle']['pts'])
-    right_cavity_pts = np.array(geom['geom_rcav']['pts'])
-    left_cavity_pts = np.array(geom['geom_lcav']['pts'])
 
     activation_times = h5py.File(r'forward_inverse_3d/data/activation_times_ecgsim.mat', 'r')
     activation = np.array(activation_times['dep']).reshape(-1)
@@ -257,7 +278,81 @@ def get_activation_dict():
     for i in range(ventricle_pts.shape[0]):
         time = activation[i]
         coord = ventricle_pts[i]
-        if coord.tolist() in right_cavity_pts.tolist() or coord.tolist() in left_cavity_pts.tolist():
-           activation_dict[time] = coord
+        activation_dict[time] = coord
+    
+    if target_coords is not None:
+        activation_dict = compute_full_activation_dict(activation_dict, target_coords, threshold)
     
     return activation_dict
+
+def compute_full_activation_dict(activation_dict, pts, threshold, power=2.0):
+    """
+    使用 IDW (Inverse Distance Weighting) 对 pts 进行激活时间插值。
+    不再使用 activation_dict 的 key 做插值点，只用它存的三维坐标。
+    
+    参数：
+        activation_dict : dict
+            {activation_time : point3d}
+        pts : array-like
+            待插值的点 (N,3)
+        power : float
+            IDW 幂指数, 默认 2
+        
+    返回：
+        dict, 结构为 { interpolated_time : point }
+    """
+
+    # 空输入直接返回
+    if len(activation_dict) == 0:
+        return {}
+
+    # ---- 提取已知的时间与坐标 ----
+    known_times = np.array(list(activation_dict.keys()), dtype=float)   # (M,)
+    known_pts   = np.array(list(activation_dict.values()), dtype=float) # (M,3)
+
+    # ---- 保证 pts 形状正确 ----
+    pts = np.asarray(pts, dtype=float)
+    if pts.ndim == 1:
+        pts = pts.reshape(1, -1)
+
+    # ---- 向量化距离计算 ----
+    # diff[i,j,:] = pts[i] - known_pts[j]
+    diff = pts[:, None, :] - known_pts[None, :, :]
+    dists = np.linalg.norm(diff, axis=2)   # (N,M)
+
+    eps = 1e-12
+    result = {}
+    used_keys = set()
+
+    # ---- 对每个目标点做插值 ----
+    for i in range(dists.shape[0]):
+        row = dists[i]
+
+        # -------- 精确匹配：距离为 0 --------
+        exact = np.where(row <= eps)[0]
+        if exact.size > 0:
+            t_val = float(known_times[exact[0]])
+
+        else:
+            # -------- IDW 权值 --------
+            weights = 1.0 / (row ** power)
+            wsum = weights.sum()
+
+            if wsum <= 0:
+                t_val = float(np.mean(known_times))
+            else:
+                t_val = float((weights * known_times).sum() / wsum)
+
+        # -------- 避免 key 冲突 --------
+        key = t_val
+        offset = 0
+        while key in used_keys:
+            offset += 1
+            key = t_val + 1e-8 * offset
+
+        used_keys.add(key)
+        result[key] = pts[i].copy()
+
+    # save the ones that key less than threshold
+    result = {k: v for k, v in result.items() if k < threshold}
+    return result

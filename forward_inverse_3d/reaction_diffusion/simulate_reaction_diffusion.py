@@ -1,5 +1,3 @@
-import sys
-
 from dolfinx.io import gmshio
 from dolfinx.mesh import create_submesh
 from dolfinx.fem import functionspace, Function, form
@@ -8,11 +6,9 @@ from ufl import TrialFunction, TestFunction, dot, grad, Measure
 from mpi4py import MPI
 from petsc4py import PETSc
 import numpy as np
-
-sys.path.append('.')
 from utils.function_tools import assign_function
 from utils.ventricular_segmentation_tools import distinguish_epi_endo
-from forward_inverse_3d.simulate_ischemia.simulate_tools import build_tau_close, build_tau_in, build_D, get_activation_dict, ischemia_condition
+from utils.simulate_tools import build_tau_close, build_tau_in, build_D, get_activation_dict, ischemia_condition
 
 def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           ischemia_flag=False, scar_flag=False,
@@ -23,7 +19,14 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           T=120, step_per_timeframe=10,
                                           v_min=-90, v_max=10,
                                           tau_close_vary=False,
-                                          affect_D=True, affect_tau_in=True, affect_tau_close=True):
+                                          affect_D=True, affect_tau_in=True, affect_tau_close=True,
+                                          activation_dict_origin=None,
+                                          stim_radius=5.0, stim_strength=0.5,
+                                          tau_close_endo=155, tau_close_mid=150,
+                                          tau_close_epi=145, tau_close_shift=20,
+                                          tau_in_val=0.4, tau_in_ischemia=1,
+                                          D_val=1e-1, D_val_ischemia=5e-2, D_val_scar=0
+                                          ):
     '''
     ischemia affect to D tau_close tau_in
     '''
@@ -50,11 +53,27 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                    marker_function=marker_function,
                                    ischemia_epi_endo=ischemia_epi_endo)
     
-    D = build_D(V_piecewise, condition=condition, scar=scar_flag and affect_D, ischemia=ischemia_flag and affect_D)
+    D = build_D(V_piecewise, 
+                condition=condition, 
+                scar=scar_flag and affect_D, 
+                ischemia=ischemia_flag and affect_D,
+                D_val=D_val, 
+                D_val_ischemia=D_val_ischemia, 
+                D_val_scar=D_val_scar)
     tau_out = 10
     tau_open = 130
-    tau_close = build_tau_close(marker_function, condition, ischemia=ischemia_flag and affect_tau_close, vary=tau_close_vary)
-    tau_in = build_tau_in(V, condition, ischemia=ischemia_flag and affect_tau_in)
+    tau_close = build_tau_close(marker_function, 
+                                condition, 
+                                ischemia=ischemia_flag and affect_tau_close, 
+                                vary=tau_close_vary,
+                                tau_close_endo=tau_close_endo,
+                                tau_close_mid=tau_close_mid,
+                                tau_close_epi=tau_close_epi,
+                                tau_close_shift=tau_close_shift)
+    tau_in = build_tau_in(V, 
+                          condition, 
+                          ischemia=ischemia_flag and affect_tau_in,
+                          tau_in_val=tau_in_val, tau_in_ischemia=tau_in_ischemia)
     u_crit = 0.13
 
     u_peak = Function(V)
@@ -103,23 +122,31 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     
     b_u = create_vector(linear_form_u)
 
-    # ---------------------------
-    # activation 座标（物理坐标）
-    # 保持原始字典的物理坐标定义，不再把它映射到单个 DOF/节点索引
-    activation_centers_original = get_activation_dict()
-    # 把时间转换为步数索引，但保留物理坐标作为激活中心
     
-    activation_centers = { int(k * step_per_timeframe) : v for k, v in activation_centers_original.items() }
+    if activation_dict_origin is None:
+        endo_idx = np.where(np.isclose(epi_endo_marker, -1.0))[0]
+        target_coords = subdomain_ventricle.geometry.x[endo_idx, :]
+        activation_dict_origin = get_activation_dict(target_coords)
+        
+    from collections import defaultdict
+    activation_dict = defaultdict(list)
 
-    # 刺激的物理半径和强度（你可以根据需要调整）
-    stim_radius = 5.0         # mm（或与网格同单位）----> 保持为物理长度，不随网格变化
-    stim_strength = 0.5       # A/m^3 或数值强度（与原来数值对齐）
+    for k, v in activation_dict_origin.items():
+        new_k = int(k * step_per_timeframe)
+        if not isinstance(v, list):
+            v = [v]
+        activation_dict[new_k].extend(v)
 
     # ---------------------------
     u_data = []
+
     u_data.append(u_n.x.array.copy())
     # 初始化激活计时器
     activation_timers = {}
+    # 新增：初始化已激活标志数组和激活时刻数组
+    activated = np.zeros_like(u_n.x.array, dtype=bool)
+    activation_time = np.full_like(u_n.x.array, np.nan, dtype=float)
+
     for i in range(num_steps):
         t += dt
 
@@ -127,7 +154,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         J_stim.x.array[:] = np.zeros(J_stim.x.array.shape)
 
         # 检查是否有新的激活点
-        if i in activation_centers:
+        if i in activation_dict:
             activation_timers[i] = 5 * step_per_timeframe
 
         # 更新激活计时器并累加刺激电流
@@ -136,36 +163,48 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
             if activation_timers[key] <= 0:
                 del activation_timers[key]
             else:
-                center_coord = activation_centers[key].astype(float)
+                center_coords = activation_dict[key]  # Now a list of coordinates
 
                 # interpolate 要求返回每个查询点的值（x 的形状为 (gdim, npoints)）
-                def stim_indicator(x, c=center_coord, r=stim_radius, s=stim_strength):
-                    # x: (gdim, npoints)
+                def stim_indicator(x, centers=center_coords, r=stim_radius, s=stim_strength):
                     pts = x.T  # (npoints, gdim)
-                    d2 = np.sum((pts - c)**2, axis=1)
-                    return np.where(d2 <= r**2, np.full(pts.shape[0], s), np.zeros(pts.shape[0]))
+                    centers_arr = np.array(centers)  # (ncenters, gdim)
+                    diff = pts[:, None, :] - centers_arr[None, :, :]
+                    d2 = np.sum(diff**2, axis=2)  # (npoints, ncenters)
+
+                    # 找每个点与最近中心的距离平方
+                    dmin = np.min(d2, axis=1)  # (npoints,)
+
+                    return np.where(dmin <= r**2, s, 0)
 
                 # 累加刺激电流
                 J_stim_plus.interpolate(stim_indicator)
-                J_stim.x.array[:] = J_stim.x.array + J_stim_plus.x.array
-                
+                J_stim.x.array[:] += J_stim_plus.x.array[:]
 
         # 组装并求解
         with b_u.localForm() as loc_b:
             loc_b.set(0)
         assemble_vector(b_u, linear_form_u)
         solver.solve(b_u, uh.vector)
-        
-        if i > 150 * step_per_timeframe:
-            uh.x.array[:] = np.where(uh.x.array-u_n.x.array > 0, u_n.x.array, uh.x.array)
-        
+
+
+        # 防止二次激活：只允许未激活点被激活，并记录激活时刻
+        newly_activated = (~activated) & (uh.x.array > 0.8)
+        activated[newly_activated] = True
+        activation_time[newly_activated] = t  # 记录首次激活时刻
+
+        # 激活1秒后不许u值上升
+        lock_mask = activated & (t - activation_time >= 10)
+        # uh.x.array[lock_mask & (uh.x.array > u_n.x.array)] = u_n.x.array[lock_mask & (uh.x.array > u_n.x.array)]
+
         u_n.x.array[:] = uh.x.array
         v_n.x.array[:] = v_n.x.array + dt * np.where(u_n.x.array < u_crit, (1 - v_n.x.array) / tau_open, -v_n.x.array / tau_close.x.array)
+
         u_data.append(u_n.x.array.copy())
 
     u_data = np.array(u_data)
-    u_data = np.where(u_data > 1, 1, u_data)
-    u_data = np.where(u_data < 0, 0, u_data)
+    # u_data = np.where(u_data > 1, 1, u_data)
+    # u_data = np.where(u_data < 0, 0, u_data)
     u_data = u_data * (v_max - v_min) + v_min
     
     return u_data, None, None
@@ -175,7 +214,7 @@ if __name__ == "__main__":
     step_per_timeframe = 4
     import time
     start_time = time.time()
-    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, T=2000, step_per_timeframe=step_per_timeframe)
+    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, T=500, step_per_timeframe=step_per_timeframe)
     end_time = time.time()
     print(f"Simulation time: {end_time - start_time} seconds")
     from utils.visualize_tools import plot_v_random
