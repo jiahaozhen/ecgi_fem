@@ -1,5 +1,5 @@
 import time
-from forward_inverse_3d.forward.forward_coupled_matrix_formm import compute_d_from_tmp as compute_d_coupled_matrix
+from forward_inverse_3d.forward.forward_coupled_matrix_form import compute_d_from_tmp as compute_d_coupled_matrix
 from forward_inverse_3d.simulate_ischemia.forward_coupled import compute_d_from_tmp as compute_d_coupled
 from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
 from utils.visualize_tools import compare_bsp_on_standard12lead
