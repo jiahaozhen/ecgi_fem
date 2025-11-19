@@ -10,7 +10,7 @@ import h5py
 import scipy.io as sio
 import numpy as np
 import scipy.interpolate
-from forward_inverse_3d.simulate_ischemia.forward_coupled import compute_d_from_tmp
+from forward_inverse_3d.forward.forward_coupled_ischemia import compute_d_from_tmp
 from utils.helper_function import transfer_bsp_to_standard12lead
 from utils.visualize_tools import compare_standard_12_lead
 

@@ -10,7 +10,7 @@ import numpy as np
 # from main_reaction_diffusion_on_ventricle import compute_v_based_on_reaction_diffusion
 # from main_reaction_diffusion import compute_v_based_on_reaction_diffusion
 # from simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
-from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
+from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 
 sys.path.append('.')
 from utils.helper_function import eval_function

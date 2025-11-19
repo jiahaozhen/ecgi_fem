@@ -1,11 +1,7 @@
 # 基于有限元正过程比较正常心脏与缺血心脏的12导联心电图
-import sys
-
 import numpy as np
-
-sys.path.append('.')
-from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
-from forward_inverse_3d.simulate_ischemia.forward_coupled import compute_d_from_tmp
+from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
+from forward_inverse_3d.forward.forward_coupled_ischemia import compute_d_from_tmp
 from utils.helper_function import transfer_bsp_to_standard12lead
 from utils.visualize_tools import plot_val_on_mesh, compare_standard_12_lead
 

@@ -1,6 +1,6 @@
 import numpy as np
 import h5py
-from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
+from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from utils.helper_function import get_activation_time_from_v
 from utils.function_tools import extract_data_from_function
 from utils.visualize_tools import plot_triangle_mesh

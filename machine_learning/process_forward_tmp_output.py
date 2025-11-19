@@ -2,9 +2,8 @@ import os
 import numpy as np
 import logging
 from tqdm import tqdm  # Import tqdm for progress bar
-import gc  # Import garbage collection module
 import psutil  # Import psutil to monitor memory usage
-from forward_inverse_3d.simulate_ischemia.forward_ecgsim import compute_d_from_tmp
+from forward_inverse_3d.forward.forward_ecgsim import compute_d_from_tmp
 
 def process_forward_tmp_output(v_data, save_dir):
     os.makedirs(save_dir, exist_ok=True)

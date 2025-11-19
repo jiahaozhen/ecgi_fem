@@ -1,11 +1,8 @@
-import sys
 import os
 
 import numpy as np
-
-sys.path.append('.')
-from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
-from forward_inverse_3d.simulate_ischemia.forward_coupled import compute_d_from_tmp
+from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
+from forward_inverse_3d.forward.forward_coupled_ischemia import compute_d_from_tmp
 from utils.helper_function import transfer_bsp_to_standard12lead
 
 mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'

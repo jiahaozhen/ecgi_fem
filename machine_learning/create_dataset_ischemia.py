@@ -10,7 +10,6 @@
 4. 严重程度： 2个程度(-80mV/0mV, -70mV/-10mV)
 """
 
-import sys
 import os
 import logging
 
@@ -19,9 +18,7 @@ from dolfinx.mesh import create_submesh
 from mpi4py import MPI
 import numpy as np
 from tqdm import tqdm
-
-sys.path.append('.')
-from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
+from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from utils.ventricular_segmentation_tools import lv_17_segmentation_from_mesh
 
 # Function to generate ischemia data

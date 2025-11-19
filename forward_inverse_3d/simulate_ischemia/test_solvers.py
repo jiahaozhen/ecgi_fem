@@ -1,7 +1,7 @@
 import time
 import numpy as np
-from forward_inverse_3d.simulate_ischemia.forward_coupled import forward_tmp
-from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
+from forward_inverse_3d.forward.forward_coupled_ischemia import forward_tmp
+from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from petsc4py import PETSc
 import matplotlib.pyplot as plt
 from utils.helper_function import transfer_bsp_to_standard12lead

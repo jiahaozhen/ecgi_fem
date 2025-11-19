@@ -124,9 +124,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
 
     
     if activation_dict_origin is None:
-        endo_idx = np.where(np.isclose(epi_endo_marker, -1.0))[0]
-        target_coords = subdomain_ventricle.geometry.x[endo_idx, :]
-        activation_dict_origin = get_activation_dict(target_coords)
+        activation_dict_origin = get_activation_dict(mesh_file)
         
     from collections import defaultdict
     activation_dict = defaultdict(list)
@@ -208,14 +206,3 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     u_data = u_data * (v_max - v_min) + v_min
     
     return u_data, None, None
-
-if __name__ == "__main__":
-    mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
-    step_per_timeframe = 4
-    import time
-    start_time = time.time()
-    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, ischemia_flag=True, T=500, step_per_timeframe=step_per_timeframe)
-    end_time = time.time()
-    print(f"Simulation time: {end_time - start_time} seconds")
-    from utils.visualize_tools import plot_v_random
-    plot_v_random(v_data, step_per_timeframe=step_per_timeframe)
