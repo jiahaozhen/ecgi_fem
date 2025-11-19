@@ -151,6 +151,20 @@ def compare_standard_12_lead(*standard12Leads,
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
+def compare_bsp_on_standard12lead(*bsp_datas, 
+                                 lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1, 
+                                 labels=None, 
+                                 step_per_timeframe=4,
+                                 filter_flag=True,
+                                 filter_window_size=50):
+    from .helper_function import transfer_bsp_to_standard12lead
+    standard12Leads = [transfer_bsp_to_standard12lead(bsp_data, lead_index) for bsp_data in bsp_datas]
+    compare_standard_12_lead(*standard12Leads,
+                             labels=labels,
+                             step_per_timeframe=step_per_timeframe,
+                             filter_flag=filter_flag,
+                             filter_window_size=filter_window_size)
+
 def plot_bsp_on_standard12lead(bsp_data, 
                                lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1, 
                                step_per_timeframe=4,

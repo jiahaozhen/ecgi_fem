@@ -3,6 +3,7 @@ data/
 fenicsx/
 gmsh_test/
 zxg/
+zsy/
 *.gif
 dataset/
 .VSCodeCounter/*

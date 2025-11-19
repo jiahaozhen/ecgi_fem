@@ -1,7 +1,6 @@
 # Using tmp data from ECGsim to compute bsp
 # forward : FEM, BEM
 # save the result in .mat format
-import sys
 
 from mpi4py import MPI
 from dolfinx.io import gmshio
@@ -11,8 +10,6 @@ import h5py
 import scipy.io as sio
 import numpy as np
 import scipy.interpolate
-
-sys.path.append('.')
 from forward_inverse_3d.simulate_ischemia.forward_coupled import compute_d_from_tmp
 from utils.helper_function import transfer_bsp_to_standard12lead
 from utils.visualize_tools import compare_standard_12_lead
@@ -58,7 +55,10 @@ leadIndex = np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1
 standard12Lead_fem = transfer_bsp_to_standard12lead(d_data_fem, leadIndex)
 standard12Lead_bem = transfer_bsp_to_standard12lead(d_data_ecgsim, leadIndex)
 
-compare_standard_12_lead(standard12Lead_fem, standard12Lead_bem, step_per_timeframe=1, label1='FEM', label2='BEM')
+compare_standard_12_lead(standard12Lead_fem, standard12Lead_bem, 
+                         labels = ['FEM', 'BEM'],
+                         step_per_timeframe=1,
+                         filter_flag=False)
 
 # if ischemia:
 #     sio.savemat('3d/data/ischemia_ECGsim_fem.mat', {'surface_potential': d_data_fem})
