@@ -1,7 +1,9 @@
 import time
 from forward_inverse_3d.forward.forward_coupled_matrix_form import compute_d_from_tmp as compute_d_coupled_matrix
-from forward_inverse_3d.simulate_ischemia.forward_coupled import compute_d_from_tmp as compute_d_coupled
-from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
+from forward_inverse_3d.forward.forward_coupled_ischemia import compute_d_from_tmp as compute_d_coupled_ischemia
+from forward_inverse_3d.forward.forward_coupled import compute_d_from_tmp as compute_d_coupled
+from forward_inverse_3d.forward.forward_ecgsim import compute_d_from_tmp as compute_d_ecgsim
+from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from utils.visualize_tools import compare_bsp_on_standard12lead
 
 def test_forward_processes():
@@ -13,7 +15,8 @@ def test_forward_processes():
     v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
                                                          T=T, 
                                                          step_per_timeframe=step_per_timeframe, 
-                                                         ischemia_flag=False)
+                                                         ischemia_flag=False,
+                                                         tau_in_val=1)
 
     # Test forward_coupled_matrix_from
     start_time = time.time()

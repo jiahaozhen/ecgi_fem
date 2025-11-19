@@ -93,7 +93,7 @@ def forward_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_
 
     solver = PETSc.KSP().create()
     solver.setOperators(A)
-    solver.setType(PETSc.KSP.Type.PREONLY)
+    solver.setType(PETSc.KSP.Type.CG)
     solver.getPC().setType(PETSc.PC.Type.ILU)
 
     if v_data.ndim == 1:

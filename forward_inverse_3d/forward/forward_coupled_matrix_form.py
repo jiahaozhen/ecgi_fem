@@ -6,8 +6,7 @@ import numpy as np
 from ufl import TestFunction, TrialFunction, dot, grad, Measure
 from mpi4py import MPI
 import h5py
-from forward_inverse_3d.simulate_ischemia.simulate_tools import build_Mi, build_M, ischemia_condition
-from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
+from utils.simulate_tools import build_Mi, build_M, ischemia_condition
 from utils.function_tools import assign_function
 from utils.ventricular_segmentation_tools import distinguish_epi_endo
 
@@ -179,7 +178,7 @@ def build_forward_matrix_coupled(mesh_file,
         M_transfer[:, start:end] = U_block[closest_indices, :]  # shape: (ntargets, k)
 
         # optional progress
-        print(f"[build_forward_matrix_coupled] processed columns {start}..{end-1} / {ndofs_V2}", flush=True)
+        # print(f"[build_forward_matrix_coupled] processed columns {start}..{end-1} / {ndofs_V2}", flush=True)
 
     # 最终返回 M_transfer
     return M_transfer
@@ -187,7 +186,7 @@ def build_forward_matrix_coupled(mesh_file,
 
 def forward_tmp(mesh_file, v_data,
                 sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
-                multi_flag=True, gdim=3):
+                multi_flag=True, gdim=3, allow_cache=True):
     """
     Use the transfer matrix A (300 x N_heart) to compute BSP (300 x T) for given v_data.
     v_data may be:
@@ -198,6 +197,8 @@ def forward_tmp(mesh_file, v_data,
     # 构建前向矩阵 (300 × Nheart)
     file_path = r'forward_inverse_3d/data/forward_matrix_coupled.npz'
     try:
+        if not allow_cache:
+            raise FileNotFoundError
         data = np.load(file_path)
         A_transfer_matrix = data['A']
         print(f"Loaded precomputed forward matrix from {file_path}.", flush=True)
@@ -213,7 +214,8 @@ def forward_tmp(mesh_file, v_data,
             gdim=gdim
         )
 
-        np.savez(file_path, A=A_transfer_matrix)
+        if allow_cache:
+            np.savez(file_path, A=A_transfer_matrix)
     
     A = np.asarray(A_transfer_matrix, dtype=float)  # (300, N_nodes)
 
@@ -259,32 +261,10 @@ def forward_tmp(mesh_file, v_data,
 
 def compute_d_from_tmp(mesh_file, v_data,
                        sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
-                       multi_flag=True, gdim=3):
+                       multi_flag=True, gdim=3,
+                       allow_cache=False):
     d_data = forward_tmp(mesh_file, v_data,
                          sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t,
-                         multi_flag=multi_flag, gdim=gdim)
+                         multi_flag=multi_flag, gdim=gdim, allow_cache=allow_cache)
     # your original function returns transposed
     return d_data.T
-
-
-# ---------------- Example usage in __main__ ----------------
-if __name__ == "__main__":
-    mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
-    T = 500
-    step_per_timeframe = 4
-    import time
-    start_time = time.time()
-    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file,
-                                                         T=T,
-                                                         step_per_timeframe=step_per_timeframe,
-                                                         ischemia_flag=False)
-    end_time = time.time()
-    print(f"Reaction-diffusion simulation time: {end_time - start_time} seconds")
-
-    d_data = compute_d_from_tmp(mesh_file, v_data)
-    end_time = time.time()
-    print(f"Forward TMP to BSP simulation time: {end_time - start_time} seconds")
-
-    from utils.visualize_tools import plot_bsp_on_standard12lead
-    plot_bsp_on_standard12lead(d_data, step_per_timeframe=step_per_timeframe,
-                               filter_flag=False, filter_window_size=step_per_timeframe*10)

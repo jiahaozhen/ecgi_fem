@@ -1,5 +1,3 @@
-import sys
-
 from dolfinx.io import gmshio
 from dolfinx.fem import functionspace, form, Function
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
@@ -9,9 +7,7 @@ from ufl import TestFunction, TrialFunction, dot, grad, Measure
 from mpi4py import MPI
 from petsc4py import PETSc
 import h5py
-
-sys.path.append('.')
-from forward_inverse_3d.simulate_ischemia.simulate_tools import build_Mi, build_M, ischemia_condition
+from utils.simulate_tools import build_Mi, build_M, ischemia_condition
 from utils.function_tools import extract_data_from_function, assign_function
 from utils.ventricular_segmentation_tools import distinguish_epi_endo
 
@@ -115,23 +111,3 @@ def compute_d_from_tmp(mesh_file, v_data,
     points = np.array(geom['geom_thorax']['pts'])
     d_data = extract_data_from_function(u_f_data, u_functionspace, points)
     return d_data
-
-if __name__ == "__main__":
-    mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
-    T = 500
-    step_per_timeframe = 4
-    from forward_inverse_3d.simulate_ischemia.simulate_reaction_diffustion import compute_v_based_on_reaction_diffusion
-    import time
-    start_time = time.time()
-    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
-                                                         T=T, 
-                                                         step_per_timeframe=step_per_timeframe, 
-                                                         ischemia_flag=False)
-    end_time = time.time()
-    print(f"Reaction-diffusion simulation time: {end_time - start_time} seconds")
-    d_data = compute_d_from_tmp(mesh_file, v_data, ischemia_flag=False)
-    end_time = time.time()
-    print(f"Forward TMP to BSP simulation time: {end_time - start_time} seconds")
-    from utils.visualize_tools import plot_bsp_on_standard12lead
-    plot_bsp_on_standard12lead(d_data, step_per_timeframe=step_per_timeframe,
-                               filter_flag=True, filter_window_size=step_per_timeframe*10)
