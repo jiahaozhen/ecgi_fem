@@ -2,8 +2,7 @@
 import numpy as np
 from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from forward_inverse_3d.forward.forward_coupled_ischemia import compute_d_from_tmp
-from utils.helper_function import transfer_bsp_to_standard12lead
-from utils.visualize_tools import plot_val_on_mesh, compare_standard_12_lead
+from utils.visualize_tools import plot_val_on_mesh, compare_bsp_on_standard12lead
 
 mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
 
@@ -19,14 +18,9 @@ u_rest_ischemia_val = 0.1
 v_data_ischemia, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
                                                               ischemia_flag=True, 
                                                               T=T,
-                                                              center_ischemia=center_ischemia, 
-                                                              radius_ischemia=radius_ischemia, 
-                                                              ischemia_epi_endo=ischemia_epi_endo, 
-                                                              u_peak_ischemia_val=u_peak_ischemia_val, 
-                                                              u_rest_ischemia_val=u_rest_ischemia_val,
                                                               step_per_timeframe=step_per_timeframe)
 v_data_normal, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
-                                                            ischemia_flag=False, 
+                                                            ischemia_flag=False,
                                                             T=T, 
                                                             step_per_timeframe=step_per_timeframe)
 
@@ -40,17 +34,11 @@ d_data_normal = compute_d_from_tmp(mesh_file,
                                    v_data_normal, 
                                    ischemia_flag=False)
 
-leadIndex = np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1
-standard12Lead_ischemia = transfer_bsp_to_standard12lead(d_data_ischemia, leadIndex)
-standard12Lead_normal = transfer_bsp_to_standard12lead(d_data_normal, leadIndex)
-
 np.savez(r'forward_inverse_3d/data/simulate_ischemia/compare_normal_ischemia.npz',
          v_data_ischemia=v_data_ischemia,
          d_data_ischemia=d_data_ischemia,
          v_data_normal=v_data_normal,
-         d_data_normal=d_data_normal,
-         standard12Lead_ischemia=standard12Lead_ischemia,
-         standard12Lead_normal=standard12Lead_normal)
+         d_data_normal=d_data_normal)
 
 import multiprocessing
 p1 = multiprocessing.Process(target=plot_val_on_mesh, 
@@ -59,10 +47,11 @@ p1 = multiprocessing.Process(target=plot_val_on_mesh,
                                      "name": "v_ischemia", 
                                      "title": "v on ventricle with ischemia", 
                                      "f_val_flag": True})
-p2 = multiprocessing.Process(target=compare_standard_12_lead, 
-                             args=(standard12Lead_normal, standard12Lead_ischemia), 
+p2 = multiprocessing.Process(target=compare_bsp_on_standard12lead, 
+                             args=(d_data_normal, d_data_ischemia), 
                              kwargs={'labels': ['Normal', 'Ischemia'],
-                                     "step_per_timeframe": step_per_timeframe})
+                                     "step_per_timeframe": step_per_timeframe,
+                                     "filter_flag": False})
 p1.start()
 p2.start()
 
