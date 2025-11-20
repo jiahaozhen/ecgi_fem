@@ -4,6 +4,7 @@ from forward_inverse_3d.forward.forward_coupled_ischemia import compute_d_from_t
 from forward_inverse_3d.forward.forward_coupled import compute_d_from_tmp as compute_d_coupled
 from forward_inverse_3d.forward.forward_ecgsim import compute_d_from_tmp as compute_d_ecgsim
 from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
+from utils.simulate_tools import get_activation_dict
 from utils.visualize_tools import compare_bsp_on_standard12lead
 
 def test_forward_processes():
@@ -11,12 +12,15 @@ def test_forward_processes():
     T = 500
     step_per_timeframe = 8
 
+    activation_dict = get_activation_dict(mesh_file, mode='ENDO', threshold=40)
+
     # Generate v_data using a common method
     v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
                                                          T=T, 
                                                          step_per_timeframe=step_per_timeframe, 
                                                          ischemia_flag=False,
-                                                         tau_in_val=1)
+                                                         tau_in_val=0.4,
+                                                         activation_dict_origin=activation_dict)
 
     # Test forward_coupled_matrix_from
     start_time = time.time()
@@ -40,5 +44,6 @@ def test_forward_processes():
                                   labels=["Coupled Matrix", "Coupled"],
                                   step_per_timeframe=step_per_timeframe,
                                   filter_flag=False, filter_window_size=step_per_timeframe*10)
+    
 if __name__ == "__main__":
     test_forward_processes()
