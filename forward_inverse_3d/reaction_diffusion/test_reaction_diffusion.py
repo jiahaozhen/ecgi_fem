@@ -18,11 +18,11 @@ if __name__ == "__main__":
     #     45.6 : np.array([48.4, 40.2, -37.5])
     # }
 
-    activation_dict = get_activation_dict(mesh_file)
+    activation_dict = get_activation_dict(mesh_file, threshold=40)
 
     start_time = time.time()
     v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
-                                                         ischemia_flag=False, 
+                                                         ischemia_flag=True, 
                                                          T=500, 
                                                          step_per_timeframe=step_per_timeframe,
                                                          activation_dict_origin=activation_dict)
