@@ -67,3 +67,9 @@ def smooth_ecg_savgol(ecg_matrix, window_length=11, polyorder=3):
         smoothed[:, i] = savgol_filter(sig, window_length=window_length, polyorder=polyorder)
 
     return smoothed
+
+def transfer_bsp_to_standard300lead(bsp_data: np.ndarray, lead_index: np.ndarray = [0, 1, 65]):
+    bsp_data = np.asarray(bsp_data, dtype=float)
+    bsp_data = bsp_data - np.mean(bsp_data[:, lead_index], axis=1, keepdims=True)
+    return bsp_data
+    

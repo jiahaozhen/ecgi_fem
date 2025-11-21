@@ -15,6 +15,10 @@ def distinguish_epi_endo(mesh_file: str, gdim: int) -> np.ndarray:
     Returns:
     - epi_endo_marker: Array with 1 for epi and -1 for endo.
     """
+    if mesh_file.startswith('machine_learning'):
+        marker = distinguish_left_right_endo_epi(mesh_file, gdim=gdim)
+        epi_endo_marker = np.where(marker == -2, -1, marker)
+        return epi_endo_marker.astype(np.int32)
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim

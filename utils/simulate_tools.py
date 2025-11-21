@@ -251,16 +251,6 @@ def get_activation_dict(mesh_file, target_marker=2, gdim=3, mode='ENDO', thresho
     # mesh of Heart
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(target_marker))
 
-    if mode == 'FULL':
-        target_coords = subdomain_ventricle.geometry.x
-    elif mode == 'ENDO':
-        from utils.ventricular_segmentation_tools import distinguish_epi_endo
-        epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
-        endo_idx = np.where(np.isclose(epi_endo_marker, -1.0))[0]
-        target_coords = subdomain_ventricle.geometry.x[endo_idx, :]
-    else:
-        target_coords = None
-
     import h5py
     geom = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
     ventricle_pts = np.array(geom['geom_ventricle']['pts'])
@@ -279,6 +269,16 @@ def get_activation_dict(mesh_file, target_marker=2, gdim=3, mode='ENDO', thresho
         time = activation[i]
         coord = ventricle_pts[i]
         activation_dict[time] = coord
+
+    if mode == 'FULL':
+        target_coords = subdomain_ventricle.geometry.x
+    elif mode == 'ENDO':
+        from utils.ventricular_segmentation_tools import distinguish_epi_endo
+        epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
+        endo_idx = np.where(np.isclose(epi_endo_marker, -1.0))[0]
+        target_coords = subdomain_ventricle.geometry.x[endo_idx, :]
+    else:
+        target_coords = None
     
     if target_coords is not None:
         activation_dict = compute_full_activation_dict(activation_dict, target_coords, threshold)

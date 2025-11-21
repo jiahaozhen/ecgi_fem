@@ -5,8 +5,8 @@
 
 变化维度：
 1. 缺血位置： N(心室节点数)
-2. 缺血半径： 3个半径(10, 20, 30)
-3. 缺血范围： 5个范围(外膜, 内膜, 外中, 内中, 外中内)
+2. 缺血半径： 2个半径(10, 20)
+3. 缺血范围： 3个范围(外膜, 内膜, 外中内)
 4. 严重程度： 2个程度(-80mV/0mV, -70mV/-10mV)
 """
 
@@ -20,11 +20,14 @@ import numpy as np
 from tqdm import tqdm
 from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from utils.ventricular_segmentation_tools import lv_17_segmentation_from_mesh
+from utils.simulate_tools import get_activation_dict
 
 # Function to generate ischemia data
-def generate_ischemia_data(mesh_file, save_dir, gdim=3, T=500, step_per_timeframe=2, save_interval=200, partial_idx=0):
+def generate_ischemia_data(mesh_file, save_dir, gdim=3, T=500, step_per_timeframe=1, save_interval=200, partial_idx=0):
     os.makedirs(save_dir, exist_ok=True)
     logging.info("开始生成心肌缺血数据集")
+
+    activation_dict = get_activation_dict(mesh_file, mode='ENDO', threshold=40)
 
     segment_ids, _, _ = lv_17_segmentation_from_mesh(mesh_file, gdim=gdim)
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
@@ -35,18 +38,13 @@ def generate_ischemia_data(mesh_file, save_dir, gdim=3, T=500, step_per_timefram
         if seg_id == -1:
             continue
         segment_points = subdomain_ventricle.geometry.x[segment_ids == seg_id]
-        if len(segment_points) > 5:
-            selected_points = segment_points[np.random.choice(len(segment_points), 5, replace=False)]
-        else:
-            selected_points = segment_points
-        center_ischemia_list.extend(selected_points)
+        center_ischemia_list.extend(segment_points)
 
     # 参数定义
-    radius_ischemia_list = [10, 20]
-    ischemia_epi_endo_list = [[1, 0], [-1, 0], [-1, 0, 1]]
-    u_peak_ischemia_val_list = [0.9, 0.8]
-    u_rest_ischemia_val_list = [0.1, 0.2]
-
+    radius_ischemia_list = [10, 20, 30]
+    ischemia_epi_endo_list = [[0], [1], [-1], [1,0], [0,1], [-1, 0, 1]]
+    u_peak_ischemia_val_list = [0.9, 0.85, 0.8]
+    u_rest_ischemia_val_list = [0.1, 0.15, 0.2]
     all_v_results = []
     all_seg_ids = []
 
@@ -66,7 +64,7 @@ def generate_ischemia_data(mesh_file, save_dir, gdim=3, T=500, step_per_timefram
                                 center_ischemia=center_ischemia, radius_ischemia=radius_ischemia,
                                 T=T, step_per_timeframe=step_per_timeframe,
                                 u_peak_ischemia_val=u_peak_ischemia_val, u_rest_ischemia_val=u_rest_ischemia_val,
-                                v_min=-90, v_max=10
+                                activation_dict_origin=activation_dict
                             )
                             all_v_results.append(v)
                             all_seg_ids.append(seg_id)
@@ -88,7 +86,7 @@ def generate_ischemia_data(mesh_file, save_dir, gdim=3, T=500, step_per_timefram
 def save_partial_data(v_results, seg_ids, save_dir, partial_idx):
     X = np.array(v_results)
     y = np.array(seg_ids)
-    partial_file = os.path.join(save_dir, f"ischemia_part_{partial_idx:03d}.npz")
+    partial_file = os.path.join(save_dir, f"ischemia_v_part_{partial_idx:03d}.npz")
     np.savez_compressed(partial_file, X=X, y=y)
     logging.info(f"✅ 已保存 {partial_file}")
 
@@ -96,5 +94,5 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     generate_ischemia_data(
         mesh_file='machine_learning/data/mesh/mesh_multi_conduct_ecgsim.msh',
-        save_dir='machine_learning/data/dataset/ischemia_partial'
+        save_dir='machine_learning/data/dataset/v_dataset'
     )
