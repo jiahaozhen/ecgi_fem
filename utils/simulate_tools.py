@@ -67,6 +67,20 @@ def build_tau_close(marker_function: Function,
                                         np.where(marker_f == MARKER_MID,
                                                  tau_close_mid,
                                                  tau_close_endo))
+        
+        # from utils.ventricular_segmentation_tools import separate_lv_rv
+        # from utils.function_tools import fspace2mesh
+        # _, _, _, rv_mask = separate_lv_rv(r"machine_learning/data/mesh/mesh_multi_conduct_ecgsim.msh",3)
+        
+        # fspace2mesh_map = fspace2mesh(f_space)
+        # mesh2fspace_map = np.argsort(fspace2mesh_map)
+        # rv_idx = np.where(rv_mask)[0]
+        # rv_dof_idx = mesh2fspace_map[rv_idx]
+        # tau_close.x.array[rv_dof_idx] = tau_close_mid
+
+        # from utils.visualize_tools import plot_f_on_domain
+        # plot_f_on_domain(f_space.mesh, tau_close, title="tau_close")
+
     else:
         tau_close.x.array[:] = tau_close_mid
 

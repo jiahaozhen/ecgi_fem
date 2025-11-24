@@ -18,12 +18,12 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           u_peak_ischemia_val=0.9, u_rest_ischemia_val=0.1,
                                           T=500, step_per_timeframe=4,
                                           v_min=-90, v_max=10,
-                                          tau_close_vary=False,
+                                          tau_close_vary=True,
                                           affect_D=True, affect_tau_in=True, affect_tau_close=True,
                                           activation_dict_origin=None,
                                           stim_radius=5.0, stim_strength=0.5,
-                                          tau_close_endo=155, tau_close_mid=150,
-                                          tau_close_epi=145, tau_close_shift=20,
+                                          tau_close_endo=140, tau_close_mid=150,
+                                          tau_close_epi=135, tau_close_shift=20,
                                           tau_in_val=0.4, tau_in_ischemia=1,
                                           D_val=1e-1, D_val_ischemia=5e-2, D_val_scar=0
                                           ):
@@ -195,6 +195,10 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         lock_mask = activated & (t - activation_time >= 10)
         # uh.x.array[lock_mask & (uh.x.array > u_n.x.array)] = u_n.x.array[lock_mask & (uh.x.array > u_n.x.array)]
 
+        uh.x.array[:] = np.where(uh.x.array > 1, 1, uh.x.array)
+        uh.x.array[:] = np.where(uh.x.array < 0, 0, uh.x.array)
+
+         # 更新v_n和u_n
         u_n.x.array[:] = uh.x.array
         v_n.x.array[:] = v_n.x.array + dt * np.where(u_n.x.array < u_crit, (1 - v_n.x.array) / tau_open, -v_n.x.array / tau_close.x.array)
 
