@@ -9,12 +9,9 @@ if __name__ == '__main__':
     step_per_timeframe = 8
     
     activation_dict = get_activation_dict(mesh_file, mode='ENDO', threshold=40)
-    # activation_dict = get_activation_dict(mesh_file, mode='ENDO', threshold=100)
-    # activation_dict = get_activation_dict(mesh_file, mode='FULL')
 
     v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file,
                                                          T=T,
-                                                         tau_in_val=0.6,
                                                          step_per_timeframe=step_per_timeframe,
                                                          activation_dict_origin=activation_dict)
     d_data = compute_d_from_tmp(mesh_file, v_data)
