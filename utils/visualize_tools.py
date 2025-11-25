@@ -109,14 +109,33 @@ def plot_standard_12_lead(standard12Lead,
     ]
 
     time = np.arange(0, standard12Lead.shape[0] / step_per_timeframe, 1 / step_per_timeframe)
-    for i, ax in enumerate(axs.flat):
-        ax.plot(time, standard12Lead[:, i])
-        ax.set_title(leads[i])
-        ax.set_xlabel('Time (ms)')
-        ax.set_ylabel('Potential (mV)')
+
+    import matplotlib.ticker as ticker
+
+    for idx, ax in enumerate(axs.flat):
+        row = idx // 3
+        col = idx % 3
+
+        ax.plot(time, standard12Lead[:, idx])
+        ax.set_title(leads[idx])
+
+        # y label only at the first column
+        if col == 0:
+            ax.set_ylabel("Potential (mV)")
+        else:
+            ax.set_ylabel("")
+
+        # x label only at the bottom row
+        if row == 3:
+            ax.set_xlabel("Time (ms)")
+        else:
+            ax.set_xlabel("")
+
+        # ax.xaxis.set_major_locator(ticker.MultipleLocator(10))
+        # ax.yaxis.set_major_locator(ticker.MultipleLocator(0.1))
         ax.grid(True)
 
-    fig.suptitle('12-lead ECG', fontsize=16)
+    fig.suptitle("12-lead ECG", fontsize=16)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
 
@@ -276,3 +295,57 @@ def plot_triangle_mesh(points, triangles, point_values=None, cell_values=None, t
 
     p.add_axes()
     p.show()
+
+def scatter_val_on_domain(domain, val, name="val", tdim=3, title="Value on Domain", activation_dict=None):
+    pts = domain.geometry.x
+    val = np.asarray(val)
+
+    if len(val) != pts.shape[0]:
+        raise ValueError(f"val 长度 {len(val)} 与点数 {pts.shape[0]} 不匹配")
+
+    fig = plt.figure(figsize=(7, 5))
+
+    # 使用 tdim 与实际点维度共同决定绘图是 2D 还是 3D（确保 tdim 被使用以消除未使用警告）
+    effective_dim = min(tdim, pts.shape[1])
+
+    # 如果是 3D mesh
+    if effective_dim == 3:
+        ax = fig.add_subplot(111, projection="3d")
+        sc = ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], c=val, s=4)
+    else:
+        # 2D mesh
+        ax = fig.add_subplot(111)
+        sc = ax.scatter(pts[:, 0], pts[:, 1], c=val, s=4)
+
+    # activation：对某些点额外标色（区分数值型与颜色字符串/元组）
+    if activation_dict:
+        for idx in activation_dict.keys():
+            p = activation_dict[idx]
+            if effective_dim == 3:
+                ax.scatter(p[0], p[1], p[2], s=30, marker='o', color='red')
+            else:
+                ax.scatter(p[0], p[1], s=30, marker='o', color='red')
+
+    plt.colorbar(sc, label=name)
+    plt.title(title)
+    plt.tight_layout()
+    plt.show()
+
+    
+def scatter_f_on_domain(domain, f, name="f", tdim=3, title="Function on Domain", activation_dict=None):
+    val = eval_function(f, domain.geometry.x)
+    scatter_val_on_domain(domain, val, name=name, tdim=tdim, title=title, activation_dict=activation_dict)
+
+def plot_activation_times_on_mesh(mesh_file, act_times, gdim=3, target_cell=2, title="Activation Times on Mesh", activation_dict=None):
+    from dolfinx.io import gmshio
+    from mpi4py import MPI
+    from dolfinx.mesh import create_submesh
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    if target_cell is not None:
+        cells = cell_markers.find(target_cell)
+        subdomain, _, _, _ = create_submesh(domain, domain.topology.dim, cells)
+        domain = subdomain
+    from dolfinx.fem import Function, functionspace
+    f = Function(functionspace(domain, ("Lagrange", 1)))
+    f.x.array[:] = act_times
+    scatter_f_on_domain(domain, f, name="Activation Time", tdim=domain.topology.dim, title=title, activation_dict=activation_dict)
