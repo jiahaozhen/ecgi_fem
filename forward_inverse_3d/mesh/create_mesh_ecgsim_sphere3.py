@@ -62,8 +62,8 @@ def create_mesh(source_file, target_file, lc, lc_ratio=4):
     model_ventricle = gmsh.model.occ.addSphere(*center, radius)
     model_box = gmsh.model.occ.addBox(center[0]-radius, center[1]-radius, center[2],
                                      2*radius, 2*radius, radius)
-    model_left_cavity = gmsh.model.occ.addSphere(center[0]+radius/2, center[1], center[2], radius/2)
-    model_right_cavity = gmsh.model.occ.addSphere(center[0]-radius/2, center[1], center[2], radius/2)
+    model_left_cavity = gmsh.model.occ.addSphere(center[0], center[1]+radius/2, center[2], radius/2)
+    model_right_cavity = gmsh.model.occ.addSphere(center[0], center[1]-radius/2, center[2], radius/2)
     gmsh.model.occ.cut([(3, model_ventricle)], [(3, model_box)], tag=6, removeObject=True, removeTool=True)
     gmsh.model.occ.cut([(3, 6)], [(3, model_left_cavity), (3, model_right_cavity)], tag=7, removeTool=False)
     gmsh.model.occ.fragment([(3, 7)], [(3, model_left_cavity), (3, model_right_cavity)])

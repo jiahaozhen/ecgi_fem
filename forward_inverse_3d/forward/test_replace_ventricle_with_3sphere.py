@@ -1,7 +1,7 @@
 import numpy as np
 from forward_inverse_3d.forward.forward_coupled_matrix_form import compute_d_from_tmp
 from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
-from utils.visualize_tools import plot_bsp_on_standard12lead, plot_activation_times_on_mesh, plot_v_random
+from utils.visualize_tools import plot_bsp_on_standard12lead, plot_activation_times_on_mesh, plot_v_random, plot_val_on_mesh
 from utils.helper_function import get_activation_time_from_v
 
 if __name__ == "__main__":
@@ -11,11 +11,13 @@ if __name__ == "__main__":
 
     # 确认激活序列
 
+    # activation_dict = {
+    #     8.1 : np.array([46.8, 9.3, -40.9]),
+    #     8.2 : np.array([46.8, 70.1, -40.9])
+    # }
+
     activation_dict = {
-        # 14.4 : np.array([30.2, 45.2, -30]),
-        23.5 : np.array([88.3, 41.2, -37.3]),
-        # 34.9 : np.array([69.1, 27.1, -30]),
-        45.6 : np.array([48.4, 40.2, -37.5])
+        8: np.array([46.8, 39.7, -40.9])
     }
 
     # 确认跨膜电压
@@ -24,7 +26,7 @@ if __name__ == "__main__":
                                                          activation_dict_origin=activation_dict)
 
     # 确认心电图
-    d_data = compute_d_from_tmp(mesh_file, v_data, multi_flag=True, allow_cache=False)
+    d_data = compute_d_from_tmp(mesh_file, v_data, multi_flag=True, allow_cache=True)
     act_time = get_activation_time_from_v(v_data) / step_per_timeframe
     
     import multiprocessing
@@ -40,11 +42,16 @@ if __name__ == "__main__":
     p3 = multiprocessing.Process(target=plot_activation_times_on_mesh, 
                                  args=(mesh_file, act_time), 
                                  kwargs={'activation_dict':activation_dict})
+    p4 = multiprocessing.Process(target=plot_val_on_mesh, 
+                                 args=(mesh_file, v_data[20*step_per_timeframe]), 
+                                 kwargs={'target_cell':2, 'f_val_flag':True})
     
     p1.start()
     p2.start()
     p3.start()
+    p4.start()
 
     p1.join()
     p2.join()
     p3.join()
+    p4.join()

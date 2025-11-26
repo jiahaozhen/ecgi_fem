@@ -195,7 +195,7 @@ def forward_tmp(mesh_file, v_data,
       - 2D array (T, N_nodes) -> transposed automatically
     """
     # 构建前向矩阵 (300 × Nheart)
-    file_path = r'forward_inverse_3d/data/forward_matrix_coupled.npz'
+    file_path = 'forward_inverse_3d/data/' + mesh_file.split('/')[-1].replace('.msh', '_forward_matrix_coupled.npz')
     try:
         if not allow_cache:
             raise FileNotFoundError
