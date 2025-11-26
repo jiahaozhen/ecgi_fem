@@ -370,3 +370,37 @@ def compute_full_activation_dict(activation_dict, pts, threshold, power=2.0):
     # save the ones that key less than threshold
     result = {k: v for k, v in result.items() if k < threshold}
     return result
+
+def transform_v_into_ecgsim_form(v_data, step_per_timeframe):
+    from utils.helper_function import get_activation_time_from_v
+    
+    dep = get_activation_time_from_v(v_data) / step_per_timeframe   # (node_num,)
+    total_frames = v_data.shape[0]
+    
+    # interval -> (total_frames, 1), 间隔为 1/step_per_timeframe
+    interval = (np.arange(total_frames) / step_per_timeframe)[:, None]
+    # dep、rep 改为列向量 -> 再放到第二维（节点方向）
+    dep_row = dep[None, :]                  # shape (1, node_num)
+    rep_row = (dep + 300)[None, :]          # shape (1, node_num)
+
+    # slopes (broadcast automatically)
+    depslope  = 2.0
+    platslope = 0.0207
+    repslope  = 0.0416
+
+    # ---------- vectorized in (time, node_num) ----------
+    f1 = 1.0 / (1.0 + np.exp(-depslope  * (interval - dep_row)))
+    f2 = 1.0 / (1.0 + np.exp( platslope * (interval - rep_row)))
+    f3 = 1.0 / (1.0 + np.exp( repslope  * (interval - rep_row)))
+
+    S = f1 * f2 * f3     # shape (time, node_num)
+
+    # ---------- convert to AP shape ----------
+    ampl = 10
+    rest = -90
+    max_S = np.max(S, axis=0, keepdims=True)  # 注意 axis=0，因为 time 在前
+    tmp = S * (ampl - rest) / (max_S + 1e-12) + rest
+
+    return tmp  
+    
+    

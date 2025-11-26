@@ -142,8 +142,8 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     # 初始化激活计时器
     activation_timers = {}
     # 新增：初始化已激活标志数组和激活时刻数组
-    activated = np.zeros_like(u_n.x.array, dtype=bool)
-    activation_time = np.full_like(u_n.x.array, np.nan, dtype=float)
+    # activated = np.zeros_like(u_n.x.array, dtype=bool)
+    # activation_time = np.full_like(u_n.x.array, np.nan, dtype=float)
 
     for i in range(num_steps):
         t += dt
@@ -185,18 +185,17 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         assemble_vector(b_u, linear_form_u)
         solver.solve(b_u, uh.vector)
 
-
-        # 防止二次激活：只允许未激活点被激活，并记录激活时刻
-        newly_activated = (~activated) & (uh.x.array > 0.8)
-        activated[newly_activated] = True
-        activation_time[newly_activated] = t  # 记录首次激活时刻
-
-        # 激活1秒后不许u值上升
-        lock_mask = activated & (t - activation_time >= 10)
-        # uh.x.array[lock_mask & (uh.x.array > u_n.x.array)] = u_n.x.array[lock_mask & (uh.x.array > u_n.x.array)]
-
         uh.x.array[:] = np.where(uh.x.array > 1, 1, uh.x.array)
         uh.x.array[:] = np.where(uh.x.array < 0, 0, uh.x.array)
+
+        # 防止二次激活：只允许未激活点被激活，并记录激活时刻
+        # newly_activated = (~activated) & (uh.x.array > 0.9)
+        # activated[newly_activated] = True
+        # activation_time[newly_activated] = t  # 记录首次激活时刻
+
+        # # 激活1秒后不许u值上升
+        # lock_mask = activated & (t - activation_time >= 5)
+        # uh.x.array[lock_mask & (uh.x.array > u_n.x.array)] = u_n.x.array[lock_mask & (uh.x.array > u_n.x.array)]
 
          # 更新v_n和u_n
         u_n.x.array[:] = uh.x.array
@@ -205,8 +204,6 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         u_data.append(u_n.x.array.copy())
 
     u_data = np.array(u_data)
-    # u_data = np.where(u_data > 1, 1, u_data)
-    # u_data = np.where(u_data < 0, 0, u_data)
     u_data = u_data * (v_max - v_min) + v_min
     
     return u_data, None, None
