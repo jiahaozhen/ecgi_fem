@@ -3,6 +3,7 @@ import numpy as np
 from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from forward_inverse_3d.forward.forward_coupled_ischemia import compute_d_from_tmp
 from utils.visualize_tools import plot_val_on_mesh, compare_bsp_on_standard12lead
+from utils.simulate_tools import get_activation_dict
 
 mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
 
@@ -12,18 +13,19 @@ step_per_timeframe = 8
 center_ischemia = np.array([80.4, 19.7, -15.0])
 radius_ischemia = 30
 ischemia_epi_endo = [-1]
-u_peak_ischemia_val = 0.9
-u_rest_ischemia_val = 0.1
+
+activation_dict = get_activation_dict(mesh_file)
 
 v_data_ischemia, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
                                                               ischemia_flag=True, 
                                                               T=T,
-                                                              step_per_timeframe=step_per_timeframe)
+                                                              step_per_timeframe=step_per_timeframe,
+                                                              activation_dict_origin=activation_dict)
 v_data_normal, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
                                                             ischemia_flag=False,
                                                             T=T, 
-                                                            step_per_timeframe=step_per_timeframe)
-
+                                                            step_per_timeframe=step_per_timeframe,
+                                                            activation_dict_origin=activation_dict)
 d_data_ischemia = compute_d_from_tmp(mesh_file, 
                                      v_data_ischemia, 
                                      ischemia_flag=True,
