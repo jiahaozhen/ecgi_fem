@@ -1,28 +1,24 @@
-import sys
-
-from dolfinx import default_scalar_type
 from dolfinx.io import gmshio
-from dolfinx.fem import functionspace, form, Constant, Function, assemble_scalar
+from dolfinx.fem import functionspace, form, Function, assemble_scalar
 from dolfinx.fem.petsc import assemble_matrix, assemble_vector, create_vector
-from dolfinx.mesh import create_submesh, locate_entities_boundary
-from dolfinx.plot import vtk_mesh
+from dolfinx.mesh import create_submesh
 from ufl import TestFunction, TrialFunction, dot, grad, Measure, derivative, sqrt, inner
 from mpi4py import MPI
 from petsc4py import PETSc
 import numpy as np
-import matplotlib.pyplot as plt
-import pyvista
 import multiprocessing
-
-sys.path.append('.')
-from utils.helper_function import delta_tau, delta_deri_tau, compute_error, eval_function, find_vertex_with_neighbour_less_than_0
+from utils.error_metrics_tools import compute_error
+from utils.inverse_tools import delta_tau, delta_deri_tau
+from utils.helper_function import find_vertex_with_neighbour_less_than_0
+from utils.simulate_tools import build_M, build_Mi
+from utils.visualize_tools import plot_f_on_domain, plot_loss_and_cm
 
 def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
                                gdim=3, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
                                tau=10, alpha1=1e-2, 
-                               ischemia_potential=-60, normal_potential=-90, 
+                               ischemia_potential=-80, normal_potential=-90, 
                                multi_flag=True, plot_flag=False, 
-                               print_message=False, transmural_flag=False) -> Function:
+                               print_message=False, transmural_flag=False):
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
@@ -33,39 +29,12 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
     # function space
     V1 = functionspace(domain, ("Lagrange", 1))
     V2 = functionspace(subdomain_ventricle, ("Lagrange", 1))
-    V3 = functionspace(domain, ("DG", 0, (tdim, tdim)))
 
-    def rho1(x):
-        tensor = np.eye(tdim) * sigma_t
-        values = np.repeat(tensor, x.shape[1])
-        return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
-    def rho2(x):
-        tensor = np.eye(tdim) * (sigma_i + sigma_e)
-        values = np.repeat(tensor, x.shape[1])
-        return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
-    def rho3(x):
-        tensor = np.eye(tdim) * sigma_t / 5
-        values = np.repeat(tensor, x.shape[1])
-        return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
-    def rho4(x):
-        tensor = np.eye(tdim) * sigma_t * 3
-        values = np.repeat(tensor, x.shape[1])
-        return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
-
-    M = Function(V3)
-    M.interpolate(rho1, cell_markers.find(1))
-    M.interpolate(rho2, cell_markers.find(2))
-    if cell_markers.find(3).any():
-        if multi_flag == True:
-            M.interpolate(rho3, cell_markers.find(3))
-        else:
-            M.interpolate(rho1, cell_markers.find(3))
-    if cell_markers.find(4).any():
-        if multi_flag == True:
-            M.interpolate(rho4, cell_markers.find(4))
-        else:
-            M.interpolate(rho1, cell_markers.find(4))
-    Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
+    M = build_M(domain, cell_markers, condition=None, 
+                sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t, 
+                multi_flag=multi_flag)
+    Mi = build_Mi(subdomain_ventricle, condition=None, 
+                  sigma_i=sigma_i)
 
     # phi delta_phi delta_deri_phi
     phi = Function(V2)
@@ -89,8 +58,8 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
     A_u.assemble()
     solver = PETSc.KSP().create()
     solver.setOperators(A_u)
-    solver.setType(PETSc.KSP.Type.PREONLY)
-    solver.getPC().setType(PETSc.PC.Type.LU)
+    solver.setType(PETSc.KSP.Type.CG)
+    solver.getPC().setType(PETSc.PC.Type.ILU)
 
     # vector b_u
     dx2 = Measure("dx",domain=subdomain_ventricle)
@@ -187,16 +156,6 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
         # updata p from partial derivative
         dir_p = -J_p.array.copy()
         phi_v = phi.x.array[:].copy()
-        # marker = get_epi_endo_marker(V2)
-        # dir_p = dir_p * 10
-        # dir_p = np.where(marker == 1, dir_p, dir_p * 5)
-        # sub_domain_boundary = locate_entities_boundary(subdomain_ventricle, tdim-3, 
-        #                                                    lambda x: np.full(x.shape[1], True, dtype=bool))
-        # # find points that are not on the boundary
-        # sub_domain_inner = np.setdiff1d(np.arange(sub_node_num), sub_domain_boundary)
-        # functionspace2mesh = fspace2mesh(V2)
-        # mesh2functionspace = np.argsort(functionspace2mesh)
-        # dir_p[mesh2functionspace[sub_domain_inner]] = dir_p[mesh2functionspace[sub_domain_inner]] * 2
         
         # Barzilai-Borwein Method
         # J_p_current = J_p.array.copy()
@@ -261,20 +220,8 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
                     u.x.array[:] = u.x.array + adjustment
                 break
 
-    if plot_flag == False:
+    if not plot_flag:
         return phi, assemble_scalar(form_loss), assemble_scalar(form_reg)
-
-    def plot_loss_and_error():
-        plt.figure(figsize=(10, 8))
-        plt.subplot(1, 2, 1)
-        plt.plot(loss_per_iter)
-        plt.title('cost functional')
-        plt.xlabel('iteration')
-        plt.subplot(1, 2, 2)
-        plt.plot(cm_cmp_per_iter)
-        plt.title('error in center of mass')
-        plt.xlabel('iteration')
-        plt.show()
 
     marker = Function(V2)
     marker_val = np.zeros(sub_node_num)
@@ -284,20 +231,9 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
     marker_exact = Function(V2)
     marker_exact.x.array[:] = np.where(v_exact.x.array == ischemia_potential, 1, 0)
 
-    def plot_f_on_subdomain(f, subdomain, title):
-        grid = pyvista.UnstructuredGrid(*vtk_mesh(subdomain, tdim))
-        grid.point_data["f"] = eval_function(f, subdomain.geometry.x)
-        grid.set_active_scalars("f")
-        plotter = pyvista.Plotter()
-        plotter.add_mesh(grid, show_edges=True)
-        plotter.add_title(title)
-        plotter.view_yz()
-        plotter.add_axes()
-        plotter.show()
-
-    p1 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker, subdomain_ventricle, 'ischemia_result'))
-    p2 = multiprocessing.Process(target=plot_f_on_subdomain, args=(marker_exact, subdomain_ventricle, 'ischemia_exact'))
-    p3 = multiprocessing.Process(target=plot_loss_and_error)
+    p1 = multiprocessing.Process(target=plot_f_on_domain, args=(subdomain_ventricle, marker, 'ischemia_result'))
+    p2 = multiprocessing.Process(target=plot_f_on_domain, args=(subdomain_ventricle, marker_exact, 'ischemia_exact'))
+    p3 = multiprocessing.Process(target=plot_loss_and_cm, args=(loss_per_iter, cm_cmp_per_iter))
     p1.start()
     p2.start()
     p3.start()
@@ -305,9 +241,3 @@ def resting_ischemia_inversion(mesh_file, d_data, v_data=None,
     p2.join()
     p3.join()
     return phi, assemble_scalar(form_loss), assemble_scalar(form_reg)
-
-if __name__ == '__main__':
-    mesh_file = "3d/data/mesh_multi_conduct_ecgsim.msh"
-    d = np.load('3d/data/u_data_reaction_diffusion_ischemia_data_argument_denoise.npy')[0]
-    v = np.load('3d/data/v_data_reaction_diffusion_ischemia_data_argument.npy')[0]
-    resting_ischemia_inversion(mesh_file, d_data=d, v_data=v, plot_flag=True, print_message=True, transmural_flag=True)

@@ -7,56 +7,6 @@ from .normals_and_tangents import facet_vector_approximation
 from mpi4py import MPI
 import numpy as np
 
-# G function
-def G(s):
-    if not isinstance(s, np.ndarray):
-        s = np.array(s)
-    condition1 = s > 0
-    condition2 = s < 0
-    result = np.zeros_like(s)
-    result[condition1] = 1
-    result[condition2] = 0
-    return result
-
-# G_tau function
-def G_tau(s, tau):
-    if not isinstance(s, np.ndarray):
-        s = np.array(s)
-    condition1 = s > tau
-    condition2 = s < -tau
-    condition3 = ~(condition1 | condition2)
-    result = np.zeros_like(s)
-    result[condition1] = 1
-    result[condition2] = 0
-    result[condition3] = 0.5 * (1 + s[condition3] / tau + (1 / np.pi) * np.sin(np.pi * s[condition3] / tau))
-    return result
-
-# delta_tau function
-def delta_tau(s, tau):
-    if not isinstance(s, np.ndarray):
-        s = np.array(s)
-    condition1 = s > tau
-    condition2 = s < -tau
-    condition3 = ~(condition1 | condition2)
-    result = np.zeros_like(s)
-    result[condition1] = 0
-    result[condition2] = 0
-    result[condition3] = (1 / (2 * tau)) * (1 + np.cos(np.pi * s[condition3] / tau))
-    return result
-
-# delta^{'}_tau function
-def delta_deri_tau(s, tau):
-    if not isinstance(s, np.ndarray):
-        s = np.array(s)
-    condition1 = s > tau
-    condition2 = s < -tau
-    condition3 = ~(condition1 | condition2)
-    result = np.zeros_like(s)
-    result[condition1] = 0
-    result[condition2] = 0
-    result[condition3] = -(np.pi / (2 * tau**2)) * np.sin(np.pi * s[condition3] / tau)
-    return result
-
 def petsc2array(v):
     s=v.getValues(range(0, v.getSize()[0]), range(0,  v.getSize()[1]))
     return s
@@ -320,6 +270,7 @@ def get_activation_time_from_v(v_data: np.ndarray):
     return activation_time
 
 def v_data_argument(phi_1: np.ndarray, phi_2: np.ndarray, tau = 10, a1 = -90, a2 = -60, a3 = 10, a4 = -20):
+    from utils.inverse_tools import G_tau
     G_phi_1 = G_tau(phi_1, tau)
     G_phi_2 = G_tau(phi_2, tau)
     v = ((a1 * G_phi_2 + a3 * (1 - G_phi_2)) * G_phi_1 + 

@@ -349,3 +349,15 @@ def plot_activation_times_on_mesh(mesh_file, act_times, gdim=3, target_cell=2, t
     f = Function(functionspace(domain, ("Lagrange", 1)))
     f.x.array[:] = act_times
     scatter_f_on_domain(domain, f, name="Activation Time", tdim=domain.topology.dim, title=title, activation_dict=activation_dict)
+
+def plot_loss_and_cm(loss_per_iter, cm_cmp_per_iter):
+    plt.figure(figsize=(10, 8))
+    plt.subplot(1, 2, 1)
+    plt.plot(loss_per_iter)
+    plt.title('cost functional')
+    plt.xlabel('iteration')
+    plt.subplot(1, 2, 2)
+    plt.plot(cm_cmp_per_iter)
+    plt.title('error in center of mass')
+    plt.xlabel('iteration')
+    plt.show()
