@@ -18,7 +18,7 @@ def unwrap_surface(original_pts):
     return np.column_stack([theta, Z])  # (num_leads, 2)
 
 
-def project_bsp_on_surface(bsp_data, original_pts=load_bsp_pts(), length=90, width=30):
+def project_bsp_on_surface(bsp_data, original_pts=load_bsp_pts(), length=50, width=50):
     num_timepoints, num_leads = bsp_data.shape
 
     xy_pts = unwrap_surface(original_pts)  # (num_leads, 2)
