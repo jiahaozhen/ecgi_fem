@@ -102,6 +102,11 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         u_n.interpolate(lambda x: np.full(x.shape[1], 0))
         uh.interpolate(lambda x: np.full(x.shape[1], 0))
 
+    if isinstance(u_peak, Function):
+        ischemia_marker = np.where(np.abs(u_peak.x.array - u_peak_ischemia_val) < 1e-3, 1, 0)
+    else:
+        ischemia_marker = np.full(u_n.x.array.shape, 0)
+
     v_n.interpolate(lambda x : np.full(x.shape[1], 1))
     
     dx1 = Measure("dx", domain=subdomain_ventricle)
@@ -206,4 +211,4 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     u_data = np.array(u_data)
     u_data = u_data * (v_max - v_min) + v_min
     
-    return u_data, None, None
+    return u_data, ischemia_marker, V

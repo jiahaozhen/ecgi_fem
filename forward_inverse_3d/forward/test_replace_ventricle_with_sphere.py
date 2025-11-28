@@ -2,7 +2,7 @@ import numpy as np
 from forward_inverse_3d.forward.forward_coupled_matrix_form import compute_d_from_tmp
 from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from utils.visualize_tools import plot_bsp_on_standard12lead, plot_activation_times_on_mesh, plot_v_random
-from utils.helper_function import get_activation_time_from_v
+from utils.transmembrane_potential_tools import get_activation_time_from_v
 
 if __name__ == "__main__":
     # 读取网格

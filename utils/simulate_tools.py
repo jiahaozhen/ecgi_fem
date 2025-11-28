@@ -372,7 +372,7 @@ def compute_full_activation_dict(activation_dict, pts, threshold, power=2.0):
     return result
 
 def transform_v_into_ecgsim_form(v_data, step_per_timeframe):
-    from utils.helper_function import get_activation_time_from_v
+    from utils.transmembrane_potential_tools import get_activation_time_from_v
     
     dep = get_activation_time_from_v(v_data) / step_per_timeframe   # (node_num,)
     total_frames = v_data.shape[0]

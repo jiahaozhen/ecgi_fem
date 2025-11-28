@@ -1,168 +1,17 @@
 from ufl import grad
 from dolfinx.mesh import locate_entities_boundary, meshtags, exterior_facet_indices, create_submesh, Mesh
-from dolfinx.geometry import bb_tree, compute_collisions_points, compute_colliding_cells
 from dolfinx.fem import functionspace, Function, Expression
 from dolfinx.io import gmshio
 from .normals_and_tangents import facet_vector_approximation
 from mpi4py import MPI
 import numpy as np
+from utils.function_tools import eval_function
+
 
 def petsc2array(v):
     s=v.getValues(range(0, v.getSize()[0]), range(0,  v.getSize()[1]))
     return s
 
-def compute_error_with_v(v_exact, v_result, function_space, v_rest_healthy, v_rest_ischemia, v_peak_healthy, v_peak_ischemia):
-    #ichemic region
-    ischemia_exact_condition = ((v_exact > v_rest_ischemia-5) & (v_exact < v_rest_ischemia+5)| 
-                                (v_exact > v_peak_ischemia-5) & (v_exact < v_peak_ischemia+5))
-    marker_ischemia_exact = np.where(ischemia_exact_condition, 1, 0)
-    ischemia_result_condition = ((v_result > v_rest_ischemia-5) & (v_result < v_rest_ischemia+5)| 
-                                (v_result > v_peak_ischemia-5) & (v_result < v_peak_ischemia+5))
-    marker_ischemia_result = np.where(ischemia_result_condition, 1, 0)
-    #activate region
-    activate_exact_condition = v_exact > (v_peak_healthy + v_rest_healthy)/2
-    marker_activate_exact = np.where(activate_exact_condition, 1, 0)
-    activate_result_condition = v_result > (v_peak_healthy + v_rest_healthy)/2
-    marker_activate_result = np.where(activate_result_condition, 1, 0)
-
-    coordinates = function_space.tabulate_dof_coordinates()
-    coordinates_ischemia_exact = coordinates[np.where(marker_ischemia_exact == 1)]
-    coordinates_ischemia_result = coordinates[np.where(marker_ischemia_result == 1)]
-    coordinates_activate_exact = coordinates[np.where(marker_activate_exact == 1)]
-    coordinates_activate_result = coordinates[np.where(marker_activate_result == 1)]
-
-    cm_ischemia_exact = np.mean(coordinates_ischemia_exact, axis=0)
-    cm_ischemia_result = np.mean(coordinates_ischemia_result, axis=0)
-    cm_activate_exact = np.mean(coordinates_activate_exact, axis=0)
-    cm_activate_result = np.mean(coordinates_activate_result, axis=0)
-
-    cm_error_ischemia = np.linalg.norm(cm_ischemia_exact-cm_ischemia_result)   
-    cm_error_activate = np.linalg.norm(cm_activate_exact-cm_activate_result)
-
-    return (cm_error_ischemia, cm_error_activate)
-
-def compute_phi_with_v(v, function_space, v_rest_healthy, v_rest_ischemia, v_peak_healthy, v_peak_ischemia):
-    coordinates = function_space.tabulate_dof_coordinates()
-    marker_ischemia = (((v > v_rest_ischemia - 5) & (v < v_rest_ischemia + 5)) |
-                       ((v > v_peak_ischemia - 5) & (v < v_peak_ischemia + 5)))
-    marker_activate = v > ((v_peak_healthy + v_rest_healthy) / 2)
-    
-    def min_distance(coords, mask):
-        if np.any(mask):
-            return np.min(np.linalg.norm(coords[:, None, :] - coords[mask], axis=2), axis=1)
-        else:
-            return np.zeros(len(coords))
-    
-    min_iso = min_distance(coordinates, marker_ischemia)
-    min_no_iso = min_distance(coordinates, ~marker_ischemia)
-    min_act = min_distance(coordinates, marker_activate)
-    min_no_act = min_distance(coordinates, ~marker_activate)
-    
-    phi_1 = np.where(marker_ischemia, -min_no_iso, min_iso)
-    phi_2 = np.where(marker_activate, -min_no_act, min_act)
-
-    return phi_1, phi_2
-
-def compute_phi_with_v_timebased(v, function_space, marker_ischemia):
-    phi_1 = np.full_like(v, 0)
-    phi_2 = np.full_like(v, 0)
-    activation_time = get_activation_time_from_v(v)
-    marker_ischemia = np.where(marker_ischemia==1, True, False)
-
-    coordinates = function_space.tabulate_dof_coordinates()
-    marker_activation  = np.full_like(v, False, dtype=bool)
-    for i in range(v.shape[1]):
-        marker_activation[activation_time[i]:, i] = True
-
-    def min_distance(coords, mask):
-        if np.any(mask):
-            return np.min(np.linalg.norm(coords[:, None, :] - coords[mask], axis=2), axis=1)
-        else:
-            return np.zeros(len(coords))
-    
-    min_iso = min_distance(coordinates, marker_ischemia)
-    min_no_iso = min_distance(coordinates, ~marker_ischemia)
-    for timeframe in range(v.shape[0]):
-        
-        min_act = min_distance(coordinates, marker_activation[timeframe])
-        min_no_act = min_distance(coordinates, ~marker_activation[timeframe])
-    
-        phi_1[timeframe] = np.where(marker_ischemia, -min_no_iso, min_iso)
-        phi_2[timeframe] = np.where(marker_activation[timeframe], -min_no_act, min_act)
-        if (phi_1[timeframe] == 0).all():
-            phi_1[timeframe] = 20
-        if (phi_2[timeframe] == 0).all():
-            if timeframe < np.min(activation_time) + 5:
-                phi_2[timeframe] = 20
-            else:
-                phi_2[timeframe] = -20
-    return phi_1, phi_2
-
-def compute_error(v_exact, phi_result):
-    marker_exact = np.full(v_exact.x.array.shape, 0)
-    marker_exact[v_exact.x.array > -89.9] = 1
-    marker_result = np.full(phi_result.x.array.shape, 0)
-    marker_result[phi_result.x.array < 0] = 1
-
-    coordinates = v_exact.function_space.tabulate_dof_coordinates()
-    coordinates_ischemia_exact = coordinates[np.where(marker_exact == 1)]
-    coordinates_ischemia_result = coordinates[np.where(marker_result == 1)]
-
-    cm1 = np.mean(coordinates_ischemia_exact, axis=0)
-    cm2 = np.mean(coordinates_ischemia_result, axis=0)
-    cm = np.linalg.norm(cm1-cm2)
-
-    if (coordinates_ischemia_result.size == 0):
-        return (cm, None, None, None)
-    
-    # HaussDist
-    hdxy = 0
-    for coordinate in coordinates_ischemia_exact:
-        hdy = np.min(np.linalg.norm(coordinate - coordinates_ischemia_result, axis=1))
-        hdxy = max(hdxy, hdy)
-    hdyx = 0
-    for coordinate in coordinates_ischemia_result:
-        hdx = np.min(np.linalg.norm(coordinate - coordinates_ischemia_exact, axis=1))
-        hdyx = max(hdyx, hdx)
-    hd = max(hdxy, hdyx)
-
-    # SN false negative
-    marker_exact_index = np.where(marker_exact == 1)[0]
-    marker_result_index = np.where(marker_result == 1)[0]
-    SN = 0
-    for index in marker_exact_index:
-        if index not in marker_result_index:
-            SN = SN + 1
-    SN = SN / np.shape(marker_exact_index)[0]
-
-    # SP false positive
-    SP = 0
-    for index in marker_result_index:
-        if index not in marker_exact_index:
-            SP = SP + 1
-    SP = SP / np.shape(marker_result_index)[0]
-
-    return (cm, hd, SN, SP)
-
-# function to compare exact phi and result phi
-def compare_phi_one_timeframe(phi_exact, phi_result, coordinates = []):
-    marker_exact = np.where(phi_exact < 0, 1, 0)
-    marker_result = np.where(phi_result < 0, 1, 0)
-    cc = np.corrcoef(marker_exact, marker_result)[0, 1]
-    if coordinates != []:
-        coordinates_ischemia_exact = coordinates[np.where(marker_exact == 1)]
-        coordinates_ischemia_result = coordinates[np.where(marker_result == 1)]
-        cm1 = np.mean(coordinates_ischemia_exact, axis=0)
-        cm2 = np.mean(coordinates_ischemia_result, axis=0)
-        cm = np.linalg.norm(cm1-cm2)
-        return cc, cm
-    return cc
-
-def compute_cc(exact, result):
-    cc = []
-    for i in range(exact.shape[0]):
-        cc.append(compare_phi_one_timeframe(exact[i], result[i]))
-    return np.array(cc)
 
 def compute_normal(domain):
     tdim = domain.topology.dim
@@ -175,6 +24,7 @@ def compute_normal(domain):
 
     return eval_function(n_f, boundary_points)
 
+
 def compute_grad(u):
     domain = u.function_space.mesh
     tdim = domain.topology.dim
@@ -186,6 +36,7 @@ def compute_grad(u):
     points = domain.geometry.x
 
     return eval_function(grad_u_f, points)
+
 
 def submesh_node_index(domain, cell_markers, sub_tag):
     # the idx of submesh node in parent mesh
@@ -209,84 +60,7 @@ def submesh_node_index(domain, cell_markers, sub_tag):
                 sub2parent_node[sub_point] = parent_point
     return sub2parent_node
 
-def eval_function(u: Function, points: np.ndarray):
-    if points.ndim == 1:
-        points = points.reshape(1, -1)
-    domain = u.function_space.mesh
-    domain_tree = bb_tree(domain, domain.topology.dim)
-    # Find cells whose bounding-box collide with the the points
-    cell_candidates = compute_collisions_points(domain_tree, points)
-    # Choose one of the cells that contains the point
-    colliding_cells = compute_colliding_cells(domain, cell_candidates, points)
-    cells = []
-    points_on_proc = []
-    for i, point in enumerate(points):
-        if len(colliding_cells.links(i)) > 0:
-            points_on_proc.append(point)
-            cells.append(colliding_cells.links(i)[0])
-    points_on_proc = np.array(points_on_proc, dtype=np.float64)
-    u_values = u.eval(points_on_proc, cells)
-    return u_values
 
-def compute_error_and_correlation(result: np.ndarray, ref: np.ndarray):
-    assert len(result) == len(ref)
-    relative_error = 0
-    correlation_coefficient = 0
-    for i in range(len(result)):
-        result[i] += np.mean(ref[i]-result[i])
-        relative_error += np.linalg.norm(result[i] - ref[i]) / np.linalg.norm(ref[i])
-        correlation_matrix = np.corrcoef(result[i], ref[i])
-        correlation_coefficient += correlation_matrix[0, 1]
-    relative_error = relative_error/len(result)
-    correlation_coefficient = correlation_coefficient/len(result)
-    return relative_error, correlation_coefficient
-
-def assign_function(f: Function, idx: np.ndarray, val: np.ndarray):
-    '''idx means the value's order in domain.geometry.x'''
-    assert len(val) == len(f.x.array)
-    assert len(idx) == len(val)
-    functionspace2mesh = fspace2mesh(f.function_space)
-    mesh2functionspace = np.argsort(functionspace2mesh)
-    f.x.array[mesh2functionspace[idx]] = val
-
-def fspace2mesh(V: functionspace):
-    '''return the mapping from function space dof index to mesh vertex index'''
-    fspace_cell2point = V.dofmap.list
-    subdomain_cell2point = V.mesh.geometry.dofmap
-
-    fspace2mesh = np.ones((len(V.mesh.geometry.x)), dtype=int) * -1
-    for cell2point1, cell2point2 in zip(fspace_cell2point, subdomain_cell2point):
-        for idx_fspace, idx_submesh in zip(cell2point1, cell2point2):
-            if fspace2mesh[idx_fspace] != -1:
-                assert fspace2mesh[idx_fspace] == idx_submesh
-            else:
-                fspace2mesh[idx_fspace] = idx_submesh
-    return fspace2mesh
-
-def get_activation_time_from_v(v_data: np.ndarray):
-    v_deriviative = np.diff(v_data, axis=0)
-    # find the time where the v_deriviative is biggest
-    activation_time = np.argmax(v_deriviative, axis=0)
-    return activation_time
-
-def v_data_argument(phi_1: np.ndarray, phi_2: np.ndarray, tau = 10, a1 = -90, a2 = -60, a3 = 10, a4 = -20):
-    from utils.inverse_tools import G_tau
-    G_phi_1 = G_tau(phi_1, tau)
-    G_phi_2 = G_tau(phi_2, tau)
-    v = ((a1 * G_phi_2 + a3 * (1 - G_phi_2)) * G_phi_1 + 
-         (a2 * G_phi_2 + a4 * (1 - G_phi_2)) * (1 - G_phi_1))
-    return v
-
-def compute_error_phi(phi_exact: np.ndarray, phi_result: np.ndarray, function_space: functionspace):
-    marker_exact = np.where(phi_exact < 0, 1, 0)
-    marker_result = np.where(phi_result < 0, 1, 0)
-    coordinates = function_space.tabulate_dof_coordinates()
-    coordinates_ischemia_exact = coordinates[np.where(marker_exact == 1)]
-    coordinates_ischemia_result = coordinates[np.where(marker_result == 1)]
-    cm1 = np.mean(coordinates_ischemia_exact, axis=0)
-    cm2 = np.mean(coordinates_ischemia_result, axis=0)
-    cm = np.linalg.norm(cm1-cm2)
-    return cm
 
 def find_connected_vertex(domain: Mesh, vertex: int):
     
@@ -304,6 +78,7 @@ def find_connected_vertex(domain: Mesh, vertex: int):
     connected_vertices = sorted(list(connected_vertices))
     
     return connected_vertices
+
 
 def find_all_connected_vertex(domain: Mesh):
     tdim = domain.topology.dim
@@ -326,6 +101,7 @@ def find_all_connected_vertex(domain: Mesh):
         all_neighbors.append(sorted(neighbors))
 
     return all_neighbors
+
 
 def get_boundary_vertex_connectivity(domain: Mesh):
     """
@@ -365,8 +141,10 @@ def get_boundary_vertex_connectivity(domain: Mesh):
 
     return boundary_vertices, adjacency
 
+
 def find_vertex_with_neighbour_less_than_0(domain: Mesh, f: Function):
     index_function = np.where(f.x.array < 0)[0]
+    from utils.function_tools import fspace2mesh
     f2mesh = fspace2mesh(f.function_space)
     mesh2f = np.argsort(f2mesh)
     index_mesh = f2mesh[index_function]
@@ -385,91 +163,13 @@ def find_vertex_with_neighbour_less_than_0(domain: Mesh, f: Function):
 
     return neighbor_idx, neighbor_map
 
+
 def find_vertex_with_coordinate(domain: Mesh, x: np.ndarray):
     points = domain.geometry.x
     distances = np.linalg.norm(points - x, axis=1)
     closest_vertex = np.argmin(distances)
     return closest_vertex
-    
-def transfer_bsp_to_standard12lead(bsp_data: np.ndarray, lead_index: np.ndarray):
-    standard12Lead = np.zeros((bsp_data.shape[0], 12))
-    # I = VL - VR
-    standard12Lead[:,0] = bsp_data[:,lead_index[7]] - bsp_data[:,lead_index[6]]
-    # II = VF - VR
-    standard12Lead[:,1] = bsp_data[:,lead_index[8]] - bsp_data[:,lead_index[6]]
-    # III = VF - VL
-    standard12Lead[:,2] = bsp_data[:,lead_index[8]] - bsp_data[:,lead_index[7]]
-    # Vi = Vi - (VR + VL + VF) / 3
-    standard12Lead[:, 3:9] = bsp_data[:, lead_index[0:6]] - np.mean(bsp_data[:, lead_index[6:9]], axis=1, keepdims=True)
-    # aVR = VR - (VL + VF) / 2
-    standard12Lead[:, 9] = bsp_data[:, lead_index[6]] - np.mean(bsp_data[:, lead_index[7:9]], axis=1)
-    # aVL = VL - (VR + VF) / 2
-    standard12Lead[:, 10] = bsp_data[:, lead_index[7]] - np.mean(bsp_data[:, [lead_index[6], lead_index[8]]], axis=1)
-    # aVF = VF - (VR + VL) / 2
-    standard12Lead[:, 11] = bsp_data[:, lead_index[8]] - np.mean(bsp_data[:, lead_index[6:8]], axis=1)
-    
-    return standard12Lead
 
-def add_noise_based_on_snr(data: np.ndarray, snr: float) -> np.ndarray:
-    """
-    Add noise to the data based on the specified SNR (Signal-to-Noise Ratio).
-    
-    Parameters:
-    - data: The original data to which noise will be added.
-    - snr: The desired SNR in decibels (dB).
-    
-    Returns:
-    - Noisy data with the specified SNR.
-    """
-    signal_power = np.mean(data**2)
-    noise_power = signal_power / (10**(snr / 10))
-    noise = np.random.normal(0, np.sqrt(noise_power), data.shape)
-    noisy_data = data + noise
-    return noisy_data
-
-def check_noise_level_snr(data: np.ndarray, noise: np.ndarray) -> float:
-    """
-    Check the SNR (Signal-to-Noise Ratio) of the data.
-    
-    Parameters:
-    - data: The original data.
-    - noise: The noise added to the data.
-    
-    Returns:
-    - SNR in decibels (dB).
-    """
-    signal_power = np.mean(data**2)
-    noise_power = np.mean(noise**2)
-    snr = 10 * np.log10(signal_power / noise_power)
-    return snr
-
-def compute_phi_with_activation(activation_f : Function, duration : int):
-    phi = np.zeros((duration, len(activation_f.x.array)))
-    activation_time = activation_f.x.array
-    marker_activation = np.full_like(phi, False, dtype=bool)
-    for i in range(phi.shape[1]):
-        marker_activation[int(activation_time[i]):, i] = True
-    coordinates = activation_f.function_space.tabulate_dof_coordinates()
-    
-    def min_distance(coords, mask):
-        if np.any(mask):
-            return np.min(np.linalg.norm(coords[:, None, :] - coords[mask], axis=2), axis=1)
-        else:
-            return np.zeros(len(coords))
-    
-    for timeframe in range(duration):
-        
-        min_act = min_distance(coordinates, marker_activation[timeframe])
-        min_no_act = min_distance(coordinates, ~marker_activation[timeframe])
-    
-        phi[timeframe] = np.where(marker_activation[timeframe], -min_no_act, min_act)
-        if (phi[timeframe] == 0).all():
-            if timeframe < np.min(activation_time) + 5:
-                phi[timeframe] = 20
-            else:
-                phi[timeframe] = -20
-    
-    return phi
 
 def extract_data_from_mesh(mesh_file: str, points: np.ndarray, origin_data: np.ndarray) -> np.ndarray:
     domain, _, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
@@ -483,12 +183,14 @@ def extract_data_from_mesh(mesh_file: str, points: np.ndarray, origin_data: np.n
         extracted_data.append(extracted_data_t.copy())
     return np.array(extracted_data)
 
+
 def extract_data_from_mesh1_to_mesh2(mesh_file1: str, mesh_file2: str, origin_data: np.ndarray) -> np.ndarray:
     domain2, _, _ = gmshio.read_from_msh(mesh_file2, MPI.COMM_WORLD, gdim=3)
     V2 = functionspace(domain2, ("Lagrange", 1))
     points = V2.tabulate_dof_coordinates()
     extract_data = extract_data_from_mesh(mesh_file1, points, origin_data)
     return extract_data
+
 
 def extract_data_from_submesh1_to_submesh2(mesh_file1: str, mesh_file2: str, origin_data: np.ndarray) -> np.ndarray:
     domain1, cell_markers_1, _ = gmshio.read_from_msh(mesh_file1, MPI.COMM_WORLD, gdim=3)
