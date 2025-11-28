@@ -77,7 +77,6 @@ def compute_error(v_exact, phi_result):
 
     return (cm, hd, SN, SP)
 
-# function to compare exact phi and result phi
 def compare_phi_one_timeframe(phi_exact, phi_result, coordinates = []):
     marker_exact = np.where(phi_exact < 0, 1, 0)
     marker_result = np.where(phi_result < 0, 1, 0)

@@ -4,7 +4,7 @@ from forward_inverse_3d.forward.forward_coupled_ischemia import forward_tmp
 from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
 from petsc4py import PETSc
 import matplotlib.pyplot as plt
-from utils.helper_function import transfer_bsp_to_standard12lead
+from utils.signal_processing_tools import transfer_bsp_to_standard12lead
 
 def test_different_solvers(mesh_file, v_data, solver_configs=None):
     """

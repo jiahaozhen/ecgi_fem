@@ -6,6 +6,7 @@ from dolfinx.plot import vtk_mesh
 import pyvista
 
 from .function_tools import eval_function
+from .signal_processing_tools import transfer_bsp_to_standard12lead
 
 def visualize_bullseye_points(theta, r, val):
     """在 bullseye 坐标上绘制点云分布"""
@@ -176,7 +177,6 @@ def compare_bsp_on_standard12lead(*bsp_datas,
                                  step_per_timeframe=4,
                                  filter_flag=True,
                                  filter_window_size=50):
-    from .helper_function import transfer_bsp_to_standard12lead
     standard12Leads = [transfer_bsp_to_standard12lead(bsp_data, lead_index) for bsp_data in bsp_datas]
     compare_standard_12_lead(*standard12Leads,
                              labels=labels,
@@ -189,8 +189,6 @@ def plot_bsp_on_standard12lead(bsp_data,
                                step_per_timeframe=4,
                                filter_flag=True,
                                filter_window_size=50):
-    from .helper_function import transfer_bsp_to_standard12lead
-
     standard12Lead = transfer_bsp_to_standard12lead(bsp_data, lead_index)
     plot_standard_12_lead(standard12Lead, 
                           step_per_timeframe=step_per_timeframe,

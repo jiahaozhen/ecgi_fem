@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from utils.helper_function import transfer_bsp_to_standard12lead
+from utils.signal_processing_tools import transfer_bsp_to_standard12lead
 from utils.visualize_tools import compare_standard_12_lead, plot_convergence
 from utils.error_metrics_tools import compute_convergence_metrics
 

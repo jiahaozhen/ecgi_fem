@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from utils.helper_function import transfer_bsp_to_standard12lead
+from utils.signal_processing_tools import transfer_bsp_to_standard12lead
 from utils.error_metrics_tools import compute_metrics_for_timestep
 
 # =========================================================
