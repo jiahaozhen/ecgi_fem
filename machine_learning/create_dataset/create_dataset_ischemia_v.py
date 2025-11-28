@@ -33,28 +33,22 @@ def generate_ischemia_data(mesh_file, save_dir, gdim=3, T=500, step_per_timefram
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
-    center_ischemia_list = []
-    for seg_id in np.unique(segment_ids):
-        if seg_id == -1:
-            continue
-        segment_points = subdomain_ventricle.geometry.x[segment_ids == seg_id]
-        center_ischemia_list.extend(segment_points)
+    valid_mask = segment_ids != -1
+    center_ischemia_list = subdomain_ventricle.geometry.x[valid_mask]
+    center_segment_ids = segment_ids[valid_mask]
 
     # 参数定义
-    radius_ischemia_list = [10, 20, 30]
+    radius_ischemia_list = [20]
     ischemia_epi_endo_list = [[1, 0], [0, 1], [-1, 0, 1]]
-    u_peak_ischemia_val_list = [0.9, 0.8]
-    u_rest_ischemia_val_list = [0.1, 0.2]
+    u_peak_ischemia_val_list = [0.9]
+    u_rest_ischemia_val_list = [0.1]
     all_v_results = []
     all_seg_ids = []
 
-    valid_centers = [c for c, s in zip(center_ischemia_list, segment_ids) if s != -1]
-    total_loops = len(valid_centers) * len(radius_ischemia_list) * len(ischemia_epi_endo_list) * len(u_peak_ischemia_val_list)
+    total_loops = len(center_ischemia_list) * len(radius_ischemia_list) * len(ischemia_epi_endo_list) * len(u_peak_ischemia_val_list)
 
     with tqdm(total=total_loops, desc="生成心肌缺血数据集", dynamic_ncols=True) as pbar:
-        for center_ischemia, seg_id in zip(center_ischemia_list, segment_ids):
-            if seg_id == -1:
-                continue
+        for center_ischemia, seg_id in zip(center_ischemia_list, center_segment_ids):
             for radius_ischemia in radius_ischemia_list:
                 for ischemia_epi_endo in ischemia_epi_endo_list:
                     for u_peak_ischemia_val, u_rest_ischemia_val in zip(u_peak_ischemia_val_list, u_rest_ischemia_val_list):
