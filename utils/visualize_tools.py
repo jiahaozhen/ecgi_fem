@@ -2,11 +2,15 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap
 import numpy as np
-from dolfinx.plot import vtk_mesh
 import pyvista
+from mpi4py import MPI
+from dolfinx.mesh import create_submesh
+from dolfinx.fem import Function, functionspace
+from dolfinx.io import gmshio
+from dolfinx.plot import vtk_mesh
 
 from .function_tools import eval_function
-from .signal_processing_tools import transfer_bsp_to_standard12lead
+from .signal_processing_tools import transfer_bsp_to_standard12lead, smooth_ecg_mean
 
 def visualize_bullseye_points(theta, r, val):
     """在 bullseye 坐标上绘制点云分布"""
@@ -64,16 +68,12 @@ def visualize_bullseye_segment(values):
     plt.show()
 
 def plot_val_on_mesh(mesh_file, val, gdim=3, target_cell=None, name="f", title="Function on Mesh", f_val_flag=False):
-    from dolfinx.io import gmshio
-    from mpi4py import MPI
-    from dolfinx.mesh import create_submesh
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     if target_cell is not None:
         cells = cell_markers.find(target_cell)
         subdomain, _, _, _ = create_submesh(domain, domain.topology.dim, cells)
         domain = subdomain
     if f_val_flag:
-        from dolfinx.fem import Function, functionspace
         f = Function(functionspace(domain, ("Lagrange", 1)))
         f.x.array[:] = val
         plot_f_on_domain(domain, f, name=name, tdim=domain.topology.dim, title=title)
@@ -100,7 +100,6 @@ def plot_standard_12_lead(standard12Lead,
                           filter_flag=True, 
                           filter_window_size=50):
     if filter_flag:
-        from .signal_processing_tools import smooth_ecg_mean
         standard12Lead = smooth_ecg_mean(standard12Lead, window_size=filter_window_size)
     
     fig, axs = plt.subplots(4, 3, figsize=(15, 10))
@@ -110,8 +109,6 @@ def plot_standard_12_lead(standard12Lead,
     ]
 
     time = np.arange(0, standard12Lead.shape[0] / step_per_timeframe, 1 / step_per_timeframe)
-
-    import matplotlib.ticker as ticker
 
     for idx, ax in enumerate(axs.flat):
         row = idx // 3
@@ -146,7 +143,6 @@ def compare_standard_12_lead(*standard12Leads,
                              filter_flag=True,
                              filter_window_size=50):
     if filter_flag:
-        from .signal_processing_tools import smooth_ecg_mean
         standard12Leads = [smooth_ecg_mean(data, window_size=filter_window_size) for data in standard12Leads]
 
     fig, axs = plt.subplots(4, 3, figsize=(15, 10))
@@ -334,15 +330,11 @@ def scatter_f_on_domain(domain, f, name="f", tdim=3, title="Function on Domain",
     scatter_val_on_domain(domain, val, name=name, tdim=tdim, title=title, activation_dict=activation_dict)
 
 def plot_activation_times_on_mesh(mesh_file, act_times, gdim=3, target_cell=2, title="Activation Times on Mesh", activation_dict=None):
-    from dolfinx.io import gmshio
-    from mpi4py import MPI
-    from dolfinx.mesh import create_submesh
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     if target_cell is not None:
         cells = cell_markers.find(target_cell)
         subdomain, _, _, _ = create_submesh(domain, domain.topology.dim, cells)
         domain = subdomain
-    from dolfinx.fem import Function, functionspace
     f = Function(functionspace(domain, ("Lagrange", 1)))
     f.x.array[:] = act_times
     scatter_f_on_domain(domain, f, name="Activation Time", tdim=domain.topology.dim, title=title, activation_dict=activation_dict)
@@ -361,9 +353,6 @@ def plot_loss_and_cm(loss_per_iter, cm_cmp_per_iter):
 
 def plot_scatter_on_mesh(mesh_file, gdim=3, target_cell=2, title="Mesh Plot", scatter_pts=None, point_size=12, cmap="viridis"):
     # --- 创建 pyvista 网格 ---
-    from dolfinx.io import gmshio
-    from mpi4py import MPI
-    from dolfinx.mesh import create_submesh
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     if target_cell is not None:
         cells = cell_markers.find(target_cell)
@@ -390,4 +379,76 @@ def plot_scatter_on_mesh(mesh_file, gdim=3, target_cell=2, title="Mesh Plot", sc
             )
 
     # --- 展示 ---
+    plotter.show(auto_close=False)
+
+def plot_vals_on_mesh(
+    mesh_file,
+    val_2d,                 # shape = (T, N)
+    gdim=3,
+    target_cell=None,
+    name="f",
+    title="Function on Mesh",
+    f_val_flag=False,
+    n_rows=3,
+    n_cols=4,
+    step_per_timeframe=4
+):
+    """
+    自动选择合适时间间隔，绘制多个时刻。
+    val_2d: shape = (T, N)
+    """
+
+    # ----------- 读 mesh ------------
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+
+    if target_cell is not None:
+        cells = cell_markers.find(target_cell)
+        subdomain, _, _, _ = create_submesh(domain, domain.topology.dim, cells)
+        domain = subdomain
+
+    # ----------- 数据检查 ------------
+    T, N = val_2d.shape
+    max_plots = n_rows * n_cols
+
+    if len(domain.geometry.x) != N:
+        raise ValueError(f"val_2d 列数 N={N} 与网格点数 {len(domain.geometry.x)} 不一致！")
+
+    # ----------- 自动选择 T 间隔 ------------
+    if T <= max_plots:
+        selected_indices = np.arange(T)
+    else:
+        interval = T // max_plots
+        selected_indices = np.arange(0, interval * max_plots, interval)
+
+    # print("Selected time indices:", selected_indices)  # Debug 可开启
+
+    # ----------- 创建 plotter ------------
+    plotter = pyvista.Plotter(shape=(n_rows, n_cols), border=False)
+
+    # ---- 生成基准网格 ----
+    grid_src = pyvista.UnstructuredGrid(*vtk_mesh(domain, domain.topology.dim))
+
+    # ----------- 绘制每一帧 ------------
+    for i, t in enumerate(selected_indices):
+        r = i // n_cols
+        c = i % n_cols
+        plotter.subplot(r, c)
+
+        grid = grid_src.copy()
+
+        if f_val_flag:
+            f = Function(functionspace(domain, ("Lagrange", 1)))
+            f.x.array[:] = val_2d[t]
+            val = eval_function(f, domain.geometry.x)
+        else:
+            val = val_2d[t]
+
+        grid.point_data[name] = val
+        grid.set_active_scalars(name)
+
+        plotter.add_mesh(grid, show_edges=True)
+        plotter.add_title(f"{title} (t={t/step_per_timeframe}s)")
+        plotter.view_yz()
+        plotter.add_axes()
+
     plotter.show(auto_close=False)

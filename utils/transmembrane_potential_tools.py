@@ -127,7 +127,7 @@ def compute_phi_with_v(v: np.ndarray, marker_ischemia: np.ndarray, function_spac
     return phi_1, phi_2
 
 
-def v_data_argument(phi_1: np.ndarray, phi_2: np.ndarray, tau = 10, a1 = -90, a2 = -60, a3 = 10, a4 = -20):
+def v_data_augment(phi_1: np.ndarray, phi_2: np.ndarray, tau = 10, a1 = -90, a2 = -80, a3 = 10, a4 = 0):
     G_phi_1 = G_tau(phi_1, tau)
     G_phi_2 = G_tau(phi_2, tau)
     v = ((a1 * G_phi_2 + a3 * (1 - G_phi_2)) * G_phi_1 + 
