@@ -15,32 +15,8 @@ def distinguish_epi_endo(mesh_file: str, gdim: int) -> np.ndarray:
     Returns:
     - epi_endo_marker: Array with 1 for epi and -1 for endo.
     """
-    if mesh_file.startswith('machine_learning'):
-        marker = distinguish_left_right_endo_epi(mesh_file, gdim=gdim)
-        epi_endo_marker = np.where(marker == -2, -1, marker)
-        return epi_endo_marker.astype(np.int32)
-    # mesh of Body
-    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
-    tdim = domain.topology.dim
-    # mesh of Heart
-    subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
-    subdomain_cavity, _, _, _ = create_submesh(domain, tdim, cell_markers.find(4))
-
-    epi_endo_marker = np.zeros(subdomain_ventricle.geometry.x.shape[0], dtype=np.int32)
-
-    ventricle_sub2parent = submesh_node_index(domain, cell_markers, 2)
-    ventricle_parent2sub = np.zeros(domain.geometry.x.shape[0], dtype=np.int32) - 1
-    ventricle_parent2sub[ventricle_sub2parent] = np.arange(len(ventricle_sub2parent))
-    cavity_sub2parent = submesh_node_index(domain, cell_markers, 4)
-    ventricle_boundary = locate_entities_boundary(subdomain_ventricle, tdim-3, lambda x: np.full(x.shape[1], True, dtype=bool))
-    cavity_boundary = locate_entities_boundary(subdomain_cavity, tdim-3, lambda x: np.full(x.shape[1], True, dtype=bool))
-
-    epi_endo_marker[ventricle_boundary] = 1
-    for i in range(len(cavity_boundary)):
-        node_index_in_ventricle = ventricle_parent2sub[cavity_sub2parent[cavity_boundary[i]]]
-        if node_index_in_ventricle != -1:
-            epi_endo_marker[node_index_in_ventricle] = -1
-    
+    marker = distinguish_left_right_endo_epi(mesh_file, gdim)
+    epi_endo_marker = np.where(marker==-2, -1, marker)
     return epi_endo_marker.astype(np.int32)
 
 def distinguish_left_right_endo_epi(mesh_file: str, gdim: int) -> np.ndarray:

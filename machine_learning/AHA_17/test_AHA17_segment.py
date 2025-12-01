@@ -7,7 +7,7 @@ import numpy as np
 from utils.ventricular_segmentation_tools import lv_17_segmentation_from_mesh
 from utils.visualize_tools import visualize_bullseye_segment
 
-mesh_file = r'machine_learning/data/mesh/mesh_multi_conduct_ecgsim.msh'
+mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
 gdim = 3
 
 seg_ids, r_mapped, theta_mapped = lv_17_segmentation_from_mesh(mesh_file, gdim=gdim)

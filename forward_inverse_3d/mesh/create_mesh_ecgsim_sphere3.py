@@ -75,7 +75,8 @@ def create_mesh(source_file, target_file, lc, lc_ratio=4):
 
     gmsh.model.addPhysicalGroup(3, [8], 1)  # Torso
     gmsh.model.addPhysicalGroup(3, [7], 2)  # Ventricle
-    gmsh.model.addPhysicalGroup(3, [model_left_cavity, model_right_cavity], 4)  # cavity   
+    gmsh.model.addPhysicalGroup(3, [model_left_cavity], 5)
+    gmsh.model.addPhysicalGroup(3, [model_right_cavity], 6)  # cavity   
 
     # mesh size
     lc_ventricle = lc / lc_ratio

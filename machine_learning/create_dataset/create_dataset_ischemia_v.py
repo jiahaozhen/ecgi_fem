@@ -87,6 +87,6 @@ def save_partial_data(v_results, seg_ids, save_dir, partial_idx):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     generate_ischemia_data(
-        mesh_file='machine_learning/data/mesh/mesh_multi_conduct_ecgsim.msh',
+        mesh_file='forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh',
         save_dir='machine_learning/data/dataset/v_dataset'
     )

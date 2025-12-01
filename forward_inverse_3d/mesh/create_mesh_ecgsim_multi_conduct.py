@@ -76,8 +76,10 @@ def create_mesh(source_file, target_file, lc, multi_flag=True, lc_ratio=4):
         gmsh.model.occ.synchronize()
         gmsh.model.addPhysicalGroup(3, [7], 1)  # Torso as physical group 1
         gmsh.model.addPhysicalGroup(3, [model_ventricle], 2)  # Heart as physical group 2
-        gmsh.model.addPhysicalGroup(3, [model_llung, model_rlung], 3) # Lung as physical group 3
-        gmsh.model.addPhysicalGroup(3, [model_lcav, model_rcav], 4) # Cav as physical group 4
+        gmsh.model.addPhysicalGroup(3, [model_llung], 3) # Lung as physical group 3
+        gmsh.model.addPhysicalGroup(3, [model_rlung], 4) # Lung as physical group 4
+        gmsh.model.addPhysicalGroup(3, [model_lcav], 5) # Cav as physical group 5
+        gmsh.model.addPhysicalGroup(3, [model_rcav], 6) # Cav as physical group 6
     else:
         gmsh.model.occ.cut([(3, model_thorax)], [(3, model_ventricle)], tag=7, removeTool=False)
         gmsh.model.occ.fragment([(3, 7)], [(3, model_ventricle)])
@@ -104,10 +106,6 @@ def create_mesh(source_file, target_file, lc, multi_flag=True, lc_ratio=4):
 
     gmsh.model.mesh.generate(3)
     gmsh.write(target_file)
-    # log = "\n".join(gmsh.logger.get())
-    # with open('3d/gmsh_log.txt', 'w') as log_file:
-    #     log_file.write("log:\n")
-        # log_file.write(log)
     gmsh.finalize()
 
 if __name__ == '__main__':

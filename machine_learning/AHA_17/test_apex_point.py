@@ -5,7 +5,7 @@ from mpi4py import MPI
 import pyvista
 from utils.ventricular_segmentation_tools import get_ring_pts, separate_lv_rv, get_apex_from_annulus_pts
 
-mesh_file = r'machine_learning/data/mesh/mesh_multi_conduct_ecgsim.msh'
+mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
 gdim = 3
 
 domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)

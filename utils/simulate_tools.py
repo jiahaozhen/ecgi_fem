@@ -1,5 +1,5 @@
 import numpy as np
-from dolfinx.fem import Function, functionspace
+from dolfinx.fem import Function, functionspace, FunctionSpace
 from dolfinx.mesh import Mesh
 from utils.function_tools import eval_function
 
@@ -93,7 +93,7 @@ def build_tau_close(marker_function: Function,
     return tau_close
 
 
-def build_tau_in(f_space: functionspace, 
+def build_tau_in(f_space: FunctionSpace, 
                  condition: ischemia_condition, 
                  ischemia=False,
                  tau_in_val=0.4,
@@ -115,7 +115,7 @@ def build_tau_in(f_space: functionspace,
     return tau_in
 
 
-def build_D(f_space: functionspace, 
+def build_D(f_space: FunctionSpace, 
             condition: ischemia_condition, 
             scar=False, ischemia=False,
             D_val=1e-1, D_val_ischemia=5e-2, D_val_scar=0):
@@ -240,16 +240,17 @@ def build_M(domain: Mesh,
     
     M.interpolate(rho1, cell_markers.find(1))
     M.interpolate(rho2, cell_markers.find(2))
-    if cell_markers.find(3).any():
-        if multi_flag == True:
-            M.interpolate(rho3, cell_markers.find(3))
-        else:
-            M.interpolate(rho1, cell_markers.find(3))
-    if cell_markers.find(4).any():
-        if multi_flag == True:
-            M.interpolate(rho4, cell_markers.find(4))
-        else:
-            M.interpolate(rho1, cell_markers.find(4))
+    if multi_flag == True:
+        M.interpolate(rho3, cell_markers.find(3))
+        M.interpolate(rho3, cell_markers.find(4))
+        M.interpolate(rho4, cell_markers.find(5))
+        M.interpolate(rho4, cell_markers.find(6))
+    else:
+        M.interpolate(rho1, cell_markers.find(3))
+        M.interpolate(rho1, cell_markers.find(4))
+        M.interpolate(rho1, cell_markers.find(5))
+        M.interpolate(rho1, cell_markers.find(6))
+            
     return M
 
 
