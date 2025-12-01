@@ -328,7 +328,6 @@ def scatter_val_on_domain(domain, val, name="val", tdim=3, title="Value on Domai
     plt.title(title)
     plt.tight_layout()
     plt.show()
-
     
 def scatter_f_on_domain(domain, f, name="f", tdim=3, title="Function on Domain", activation_dict=None):
     val = eval_function(f, domain.geometry.x)
@@ -359,3 +358,36 @@ def plot_loss_and_cm(loss_per_iter, cm_cmp_per_iter):
     plt.title('error in center of mass')
     plt.xlabel('iteration')
     plt.show()
+
+def plot_scatter_on_mesh(mesh_file, gdim=3, target_cell=2, title="Mesh Plot", scatter_pts=None, point_size=12, cmap="viridis"):
+    # --- 创建 pyvista 网格 ---
+    from dolfinx.io import gmshio
+    from mpi4py import MPI
+    from dolfinx.mesh import create_submesh
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    if target_cell is not None:
+        cells = cell_markers.find(target_cell)
+        subdomain, _, _, _ = create_submesh(domain, domain.topology.dim, cells)
+        domain = subdomain
+
+    
+    grid = pyvista.UnstructuredGrid(*vtk_mesh(domain, gdim))
+    # --- 初始化 plotter ---
+    plotter = pyvista.Plotter()
+    plotter.add_mesh(grid, show_edges=True)
+    plotter.add_title(title)
+    plotter.view_yz()
+    plotter.add_axes()
+
+    # --- 绘制散点 ---
+    if scatter_pts is not None:# 固定颜色（红色）
+        for pts in scatter_pts:
+            plotter.add_points(
+                pts,
+                color="red",
+                point_size=point_size,
+                render_points_as_spheres=True
+            )
+
+    # --- 展示 ---
+    plotter.show(auto_close=False)
