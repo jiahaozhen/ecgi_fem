@@ -23,7 +23,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                                           activation_dict_origin=None,
                                           stim_radius=5.0, stim_strength=0.5,
                                           tau_close_endo=100, tau_close_mid=100,
-                                          tau_close_epi=95.5, tau_close_shift=20,
+                                          tau_close_epi=95, tau_close_shift=20,
                                           tau_in_val=0.4, tau_in_ischemia=1,
                                           D_val=1e-1, D_val_ischemia=5e-2, D_val_scar=0
                                           ):
