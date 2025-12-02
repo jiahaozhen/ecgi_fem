@@ -2,6 +2,7 @@ from dolfinx.mesh import locate_entities_boundary, create_submesh
 from dolfinx.io import gmshio
 from mpi4py import MPI
 import numpy as np
+from scipy.spatial import cKDTree
 
 from .helper_function import submesh_node_index, get_boundary_vertex_connectivity
 
@@ -220,3 +221,32 @@ def lv_17_segmentation_from_mesh(mesh_file: str, gdim: int = 3) -> np.ndarray:
     segment_ids[rv_mask] = -1  # RV points marked as -1
     
     return segment_ids, r_mapped, theta_mapped
+
+
+def get_IVS_region(mesh_file, gdim=3, threshold=2.0):
+    """
+    基于 LV/RV 内膜距离差提取室间隔
+    threshold：决定多接近才属于室间隔（mm）
+    """
+    domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
+    tdim = domain.topology.dim
+
+    subdomain, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+    ventricle_pts = subdomain.geometry.x
+
+    marker = distinguish_left_right_endo_epi(mesh_file, gdim=gdim)
+    left_endo_pts = ventricle_pts[marker == -1]
+    right_endo_pts = ventricle_pts[marker == -2]
+
+    tree_LV = cKDTree(left_endo_pts)
+    tree_RV = cKDTree(right_endo_pts)
+
+    d_LV, _ = tree_LV.query(ventricle_pts)
+    d_RV, _ = tree_RV.query(ventricle_pts)
+
+    # 同时距离不应太大（避免后壁被分类进去）
+    ivs_mask = (d_LV < threshold) & (d_RV < threshold)
+
+    ivs_mask = np.where(marker == 1, False, ivs_mask)
+
+    return ivs_mask, ventricle_pts[ivs_mask], d_LV, d_RV

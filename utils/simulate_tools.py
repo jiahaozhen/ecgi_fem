@@ -292,6 +292,10 @@ def get_activation_dict(mesh_file, target_marker=2, gdim=3, mode='ENDO', thresho
         epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
         endo_idx = np.where(np.isclose(epi_endo_marker, -1.0))[0]
         target_coords = subdomain_ventricle.geometry.x[endo_idx, :]
+    elif mode == 'IVS':
+        from utils.ventricular_segmentation_tools import get_IVS_region
+        _, ivs_points, _, _ = get_IVS_region(mesh_file, gdim=gdim, threshold=24)
+        target_coords = ivs_points
     else:
         target_coords = None
     
