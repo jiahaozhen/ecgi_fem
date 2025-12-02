@@ -83,55 +83,46 @@ def get_ring_pts(mesh_file: str, gdim: int) -> tuple[np.ndarray, np.ndarray]:
     return left_point_index, ring_point_index, left_points, ring_points
 
 def separate_lv_rv(mesh_file, gdim=3):
-    from scipy.spatial import cKDTree as KDTree
+
+    _, _, left_ring_pts, right_ring_pts = get_ring_pts(mesh_file, gdim=gdim)
 
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
+
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(2))
+    ventricle_pts = subdomain_ventricle.geometry.x
+
+    apex = get_apex_from_annulus_pts(ventricle_pts, left_ring_pts)
+
+    # 5. 分别计算瓣环中心
+    left_c = left_ring_pts.mean(axis=0)
+    right_c = right_ring_pts.mean(axis=0)
+
+    # 6. 构造分割方向向量：apex -> 左瓣环方向 和 apex -> 右瓣环方向
+    vL = left_c - apex
+    vR = right_c - apex
+
+    vL /= np.linalg.norm(vL)
+    vR /= np.linalg.norm(vR)
+
+    # 7. 对每个 ventricle 点计算 apex->point 的方向向量
+    vecs = ventricle_pts - apex
+    vecs_norm = np.linalg.norm(vecs, axis=1, keepdims=True)
+    vecs = vecs / vecs_norm
+
+    # 8. 判断点更靠近左侧还是右侧（根据角度余弦）
+    cosL = np.sum(vecs * vL, axis=1)
+    cosR = np.sum(vecs * vR, axis=1)
+
+    # 9. 分配标签：cosL > cosR 则为 LV，否则为 RV
+    lv_mask = cosL > cosR
 
     marker = distinguish_left_right_endo_epi(mesh_file, gdim=gdim)
 
-    coords = subdomain_ventricle.geometry.x
-    left_endo = coords[marker == -1]
-    right_endo = coords[marker == -2]
+    lv_mask = np.where(marker == -1, True, lv_mask)
+    rv_mask = ~lv_mask
 
-    # compute min distances to left and right landmark sets (use KDTree if available)
-    # KDTree is available (imported above)
-
-    if left_endo.size == 0 and right_endo.size == 0:
-        return np.empty((0, coords.shape[1])), np.empty((0, coords.shape[1])), np.empty((0,), dtype=bool), np.empty((0,), dtype=bool)
-
-    if left_endo.size == 0:
-        return np.empty((0, coords.shape[1])), coords.copy(), np.empty((0,), dtype=bool), np.full((coords.shape[0],), True, dtype=bool)
-    if right_endo.size == 0:
-        return coords.copy(), np.empty((0, coords.shape[1])), np.full((coords.shape[0],), True, dtype=bool), np.empty((0,), dtype=bool)
-
-    if KDTree is not None:
-        tree_l = KDTree(left_endo)
-        tree_r = KDTree(right_endo)
-        d_left, _ = tree_l.query(coords)
-        d_right, _ = tree_r.query(coords)
-    else:
-        # fallback: chunked pairwise computation to avoid huge memory usage
-        def min_dists(points, targets):
-            n = points.shape[0]
-            out = np.empty(n)
-            chunk = 10000
-            for i in range(0, n, chunk):
-                p = points[i:i+chunk]
-                diff = p[:, None, :] - targets[None, :, :]
-                d2 = np.sum(diff * diff, axis=2)
-                out[i:i+chunk] = np.sqrt(d2.min(axis=1))
-            return out
-        d_left = min_dists(coords, left_endo)
-        d_right = min_dists(coords, right_endo)
-
-    # assign to side with smaller distance
-    left_mask = d_left < d_right
-    lv_points = coords[left_mask]
-    rv_points = coords[~left_mask]
-
-    return lv_points, rv_points, left_mask, ~left_mask
+    return ventricle_pts[lv_mask], ventricle_pts[rv_mask], lv_mask, rv_mask
 
 def get_apex_from_annulus_pts(vertices, annulus_pts):
     V = np.asarray(vertices)
