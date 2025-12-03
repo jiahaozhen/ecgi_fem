@@ -38,10 +38,10 @@ def generate_ischemia_data(mesh_file, save_dir, gdim=3, T=500, step_per_timefram
     center_segment_ids = segment_ids[valid_mask]
 
     # 参数定义
-    radius_ischemia_list = [20]
+    radius_ischemia_list = [20, 30]
     ischemia_epi_endo_list = [[1, 0], [0, 1], [-1, 0, 1]]
-    u_peak_ischemia_val_list = [0.9]
-    u_rest_ischemia_val_list = [0.1]
+    u_peak_ischemia_val_list = [0.9, 0.8]
+    u_rest_ischemia_val_list = [0.1, 0.2]
     all_v_results = []
     all_seg_ids = []
 
