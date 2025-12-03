@@ -1,6 +1,4 @@
-import sys
 import time
-
 from dolfinx import default_scalar_type
 from dolfinx.io import gmshio
 from dolfinx.fem import functionspace, form, Constant, Function, assemble_scalar
@@ -14,9 +12,11 @@ import numpy as np
 import pyvista
 import matplotlib.pyplot as plt
 import multiprocessing
+from utils.helper_function import find_vertex_with_neighbour_less_than_0
+from utils.transmembrane_potential_tools import G_tau, delta_tau, delta_deri_tau, v_data_argument
+from utils.function_tools import eval_function
+from utils.error_metrics_tools import compute_error_phi
 
-sys.path.append('.')
-from utils.helper_function import G_tau, delta_tau, delta_deri_tau, eval_function, compute_error_phi, find_vertex_with_neighbour_less_than_0, v_data_argument
 
 def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
                        phi_1_exact, phi_2_exact, phi_initial=None,
@@ -319,11 +319,11 @@ def ischemia_inversion(mesh_file, d_data, v_data, alpha1, time_sequence,
 
 
 if __name__ == '__main__':
-    mesh_file = '3d/data/mesh_multi_conduct_ecgsim.msh'
-    v_data_file = '3d/data/v_data_reaction_diffusion_ischemia_data_argument.npy'
-    d_data_file = '3d/data/u_data_reaction_diffusion_ischemia_data_argument.npy'
-    phi_1_file = "3d/data/phi_1_data_reaction_diffusion_ischemia.npy"
-    phi_2_file = "3d/data/phi_2_data_reaction_diffusion_ischemia.npy"
+    mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
+    v_data_file = r'forward_inverse_3d/data/v_data_reaction_diffusion_ischemia_data_argument.npy'
+    d_data_file = r'forward_inverse_3d/data/u_data_reaction_diffusion_ischemia_data_argument.npy'
+    phi_1_file = r"forward_inverse_3d/data/phi_1_data_reaction_diffusion_ischemia.npy"
+    phi_2_file = r"forward_inverse_3d/data/phi_2_data_reaction_diffusion_ischemia.npy"
     v_data = np.load(v_data_file)
     d_data = np.load(d_data_file)
     phi_1_exact = np.load(phi_1_file)
