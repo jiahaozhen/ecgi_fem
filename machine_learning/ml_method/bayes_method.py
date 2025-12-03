@@ -9,7 +9,7 @@ def bayes_classifier(X_train, y_train):
 	return clf
 
 if __name__ == '__main__':
-	data_dir = 'machine_learning/data/dataset/d_V1_V6_dataset'
+	data_dir = 'machine_learning/data/dataset/d6_standard_dataset'
 	X, y = load_dataset(data_dir)
 	X_train, X_test, y_train, y_test = split_dataset(X, y)
 	clf = bayes_classifier(X_train, y_train)
