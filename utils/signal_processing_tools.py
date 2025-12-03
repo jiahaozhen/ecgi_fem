@@ -3,7 +3,7 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.signal import savgol_filter
 
 
-def transfer_bsp_to_standard12lead(bsp_data: np.ndarray, lead_index: np.ndarray):
+def transfer_bsp_to_standard12lead(bsp_data: np.ndarray, lead_index: np.ndarray=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66])-1):
     standard12Lead = np.zeros((bsp_data.shape[0], 12))
     # I = VL - VR
     standard12Lead[:,0] = bsp_data[:,lead_index[7]] - bsp_data[:,lead_index[6]]
@@ -26,6 +26,13 @@ def transfer_bsp_to_standard12lead(bsp_data: np.ndarray, lead_index: np.ndarray)
 def transfer_bsp_to_standard300lead(bsp_data: np.ndarray, lead_index: np.ndarray = [0, 1, 65]):
     bsp_data = np.asarray(bsp_data, dtype=float)
     bsp_data = bsp_data - np.mean(bsp_data[:, lead_index], axis=1, keepdims=True)
+    return bsp_data
+
+
+def transfer_bsp_to_standard64lead(bsp_data: np.ndarray, lead_index: np.ndarray = [0, 1, 65]):
+    bsp_data = np.asarray(bsp_data, dtype=float)
+    if lead_index is not None:
+        bsp_data = bsp_data[:, 0:64] - np.mean(bsp_data[:, lead_index], axis=1, keepdims=True)
     return bsp_data
 
 
