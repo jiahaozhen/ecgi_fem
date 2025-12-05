@@ -1,50 +1,57 @@
 import os
 import numpy as np
 import logging
+import h5py
 from utils.signal_processing_tools import transfer_bsp_to_standard12lead
 
-def save_partial_bsp_data(d_V1_V6_results, seg_ids, save_dir, partial_idx):
-    d_V1_V6_array = np.array(d_V1_V6_results)
+
+def save_partial_bsp_data(bsp_results, seg_ids, save_dir, partial_idx):
+    d_array = np.array(bsp_results)
     seg_ids_array = np.array(seg_ids)
-    partial_file = os.path.join(save_dir, f"ischemia_d_standard_part_{partial_idx:03d}.npz")
+    partial_file = os.path.join(
+        save_dir, f"ischemia_d_standard_part_{partial_idx:03d}.h5"
+    )
     os.makedirs(save_dir, exist_ok=True)
-    np.savez_compressed(partial_file, X=d_V1_V6_array, y=seg_ids_array)
+    with h5py.File(partial_file, "w") as f:
+        f.create_dataset("X", data=d_array, compression="gzip")
+        f.create_dataset("y", data=seg_ids_array, compression="gzip")
     logging.info(f"✅ 已保存 {partial_file}")
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     mesh_file = 'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
-    save_dir = 'machine_learning/data/dataset/d6_standard_dataset'
+    save_dir = 'machine_learning/data/dataset_dl/d6_standard_dataset'
+    d_data_dir = 'machine_learning/data/dataset_dl/d_dataset'
 
-    # Load v_data and seg_ids from ischemia dataset
-    d_data_dir = 'machine_learning/data/dataset/d_dataset'
-    d_data_files = [os.path.join(d_data_dir, f) for f in os.listdir(d_data_dir) if f.endswith('.npz')]
-    d_data_files.sort()  # Ensure consistent order
-    d_data = []
-    seg_ids = []
+    # save_dir = 'machine_learning/data/dataset_ml/d6_standard_dataset'
+    # d_data_dir = 'machine_learning/data/dataset_ml/d_dataset'
 
-    lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1
+    d_data_files = [
+        os.path.join(d_data_dir, f) for f in os.listdir(d_data_dir) if f.endswith('.h5')
+    ]
+    d_data_files.sort()
 
     # Process data file-by-file to reduce memory usage
     for file_idx, file in enumerate(d_data_files):
-        with np.load(file) as data:
-            d_data = data['X']
-            seg_ids = data['y']
+        with h5py.File(file, "r") as data:
+            d_data = data['X'][:]
+            seg_ids = data['y'][:]
 
-        d_V1_V6_results = []
-        d_V1_V6_seg_ids = []
+        standard_d_results = []
+        standard_d_seg_ids = []
 
         for i, (d, seg_id) in enumerate(zip(d_data, seg_ids)):
             try:
-                d_V1_V6 = transfer_bsp_to_standard12lead(d, lead_index=lead_index)[:, 3:9]
-                d_V1_V6_results.append(d_V1_V6)
-                d_V1_V6_seg_ids.append(seg_id)
+                standard_d = transfer_bsp_to_standard12lead(d)[:, 3:9]
+                standard_d_results.append(standard_d)
+                standard_d_seg_ids.append(seg_id)
             except Exception as e:
                 logging.error(f"处理数据失败: {e}")
 
-        if d_V1_V6_results:
-            save_partial_bsp_data(d_V1_V6_results, 
-                                  d_V1_V6_seg_ids, 
-                                  save_dir, file_idx)
+        if standard_d_results:
+            save_partial_bsp_data(
+                standard_d_results, standard_d_seg_ids, save_dir, file_idx
+            )
             logging.info(f"✅ 已处理文件 {file}")
