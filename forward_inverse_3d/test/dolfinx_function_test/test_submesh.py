@@ -2,16 +2,13 @@
 函数空间点序列与网格点序列不一致的问题 
 子网格点序列与原网格点序列不一致的问题
 '''
-import sys
-
 from dolfinx.io import gmshio
 from dolfinx.fem import functionspace, Function
 from dolfinx.mesh import create_submesh, locate_entities_boundary
 import numpy as np
 from mpi4py import MPI
-
-sys.path.append('.')
-from utils.helper_function import submesh_node_index, eval_function, assign_function, fspace2mesh
+from utils.helper_function import submesh_node_index
+from utils.function_tools import assign_function, fspace2mesh, eval_function
 
 file = r"forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh"
 domain, cell_markers, facet_markers = gmshio.read_from_msh(file, MPI.COMM_WORLD, gdim=3)
