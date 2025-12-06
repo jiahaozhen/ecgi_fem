@@ -34,13 +34,14 @@ def compute_surface_potentials(v_data, function_space, eval_points):
 
     return np.array(v_data_ecgsim)
 
-def forward_tmp(mesh_file, v_data):
+def forward_tmp(case_name, v_data):
     """Perform forward computation to map heart potentials to body potentials."""
     # Load mesh and markers
+    mesh_file = f'forward_inverse_3d/data/mesh/mesh_{case_name}.msh'
+    geom_file = f'forward_inverse_3d/data/raw_data/geom_{case_name}.mat'
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=3)
 
     # Load geometry data
-    geom_file = 'forward_inverse_3d/data/geom_ecgsim.mat'
     v_pts_ecgsim, forward_matrix = load_geometry_data(geom_file)
 
     # Create function space for the ventricle subdomain
@@ -54,6 +55,6 @@ def forward_tmp(mesh_file, v_data):
 
     return d_data_ecgsim
 
-def compute_d_from_tmp(mesh_file, v_data):
+def compute_d_from_tmp(case_name, v_data):
     """Wrapper function to compute body potentials from heart potentials."""
-    return forward_tmp(mesh_file, v_data)
+    return forward_tmp(case_name, v_data)

@@ -8,11 +8,13 @@ from utils.simulate_tools import get_activation_dict
 from utils.visualize_tools import compare_bsp_on_standard12lead
 
 def test_forward_processes():
-    mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
+    case_name_list = ['normal_male', 'normal_male2', 'normal_young_male']
+    case_name = case_name_list[0]
+    mesh_file = f'forward_inverse_3d/data/mesh/mesh_{case_name}.msh'
     T = 500
     step_per_timeframe = 8
 
-    activation_dict = get_activation_dict(mesh_file, mode='ENDO', threshold=40)
+    activation_dict = get_activation_dict(case_name, mode='ENDO', threshold=40)
 
     # Generate v_data using a common method
     v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
@@ -24,13 +26,13 @@ def test_forward_processes():
 
     # Test forward_coupled_matrix_from
     start_time = time.time()
-    d_coupled_matrix = compute_d_coupled_matrix(mesh_file, v_data)
+    d_coupled_matrix = compute_d_coupled_matrix(case_name, v_data, allow_cache=True)
     time_coupled_matrix = time.time() - start_time
 
 
     # Test forward_coupled
     start_time = time.time()
-    d_coupled = compute_d_coupled(mesh_file, v_data)
+    d_coupled = compute_d_coupled(case_name, v_data)
     time_coupled = time.time() - start_time
 
     # Print results

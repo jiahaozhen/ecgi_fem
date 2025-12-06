@@ -91,7 +91,7 @@ def forward_tmp(mesh_file, v_data,
         u_data.append(u.x.array.copy())
     return np.array(u_data), V1
 
-def compute_d_from_tmp(mesh_file, v_data, 
+def compute_d_from_tmp(case_name, v_data, 
                        sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, 
                        multi_flag=True, gdim=3, 
                        ischemia_flag=False, scar_flag=False, 
@@ -99,6 +99,8 @@ def compute_d_from_tmp(mesh_file, v_data,
                        radius_ischemia=10, 
                        ischemia_epi_endo=[-1, 0, 1],
                        affect_Mi=True, affect_M=True):
+    mesh_file = f'forward_inverse_3d/data/mesh/mesh_{case_name}.msh'
+    geom_file = f'forward_inverse_3d/data/raw_data/geom_{case_name}.mat'
     u_f_data, u_functionspace = forward_tmp(mesh_file, v_data, 
                                             sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t, 
                                             multi_flag=multi_flag, gdim=gdim,
@@ -107,7 +109,7 @@ def compute_d_from_tmp(mesh_file, v_data,
                                             radius_ischemia=radius_ischemia, 
                                             ischemia_epi_endo=ischemia_epi_endo,
                                             affect_Mi=affect_Mi, affect_M=affect_M)
-    geom = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
+    geom = h5py.File(geom_file, 'r')
     points = np.array(geom['geom_thorax']['pts'])
     d_data = extract_data_from_function(u_f_data, u_functionspace, points)
     return d_data

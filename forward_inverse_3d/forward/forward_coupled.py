@@ -1,5 +1,3 @@
-import sys
-
 from dolfinx import default_scalar_type
 from dolfinx.io import gmshio
 from dolfinx.fem import functionspace, form, Constant, Function
@@ -10,9 +8,8 @@ from ufl import TestFunction, TrialFunction, dot, grad, Measure
 from mpi4py import MPI
 from petsc4py import PETSc
 import h5py
-
-sys.path.append('.')
 from utils.function_tools import extract_data_from_function
+from utils.simulate_tools import build_Mi, build_M
 
 def forward_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_flag=True, gdim=3):
     """
@@ -38,41 +35,13 @@ def forward_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_
 
     V1 = functionspace(domain, ("Lagrange", 1))
     V2 = functionspace(subdomain_ventricle, ("Lagrange", 1))
-    V3 = functionspace(domain, ("DG", 0, (tdim, tdim)))
+
     u = Function(V1)
     v = Function(V2)
 
-    def rho1(x):
-        tensor = np.eye(tdim) * sigma_t
-        values = np.repeat(tensor, x.shape[1])
-        return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
-    def rho2(x):
-        tensor = np.eye(tdim) * (sigma_i + sigma_e)
-        values = np.repeat(tensor, x.shape[1])
-        return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
-    def rho3(x):
-        tensor = np.eye(tdim) * sigma_t / 5
-        values = np.repeat(tensor, x.shape[1])
-        return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
-    def rho4(x):
-        tensor = np.eye(tdim) * sigma_t * 3
-        values = np.repeat(tensor, x.shape[1])
-        return values.reshape(tensor.shape[0]*tensor.shape[1], x.shape[1])
-    
-    M = Function(V3)
-    M.interpolate(rho1, cell_markers.find(1))
-    M.interpolate(rho2, cell_markers.find(2))
-    if cell_markers.find(3).any():
-        if multi_flag == True:
-            M.interpolate(rho3, cell_markers.find(3))
-        else:
-            M.interpolate(rho1, cell_markers.find(3))
-    if cell_markers.find(4).any():
-        if multi_flag == True:
-            M.interpolate(rho4, cell_markers.find(4))
-        else:
-            M.interpolate(rho1, cell_markers.find(4))
-    Mi = Constant(subdomain_ventricle, default_scalar_type(np.eye(tdim) * sigma_i))
+    Mi = build_Mi(subdomain_ventricle, condition=None, sigma_i=sigma_i)
+    M = build_M(domain, cell_markers=cell_markers, multi_flag=True, condition=None, 
+                sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t)
 
     # A u = b
     # matrix A
@@ -109,9 +78,11 @@ def forward_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_
         u_data.append(u.x.array.copy())
     return np.array(u_data), V1
 
-def compute_d_from_tmp(mesh_file, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_flag=True):
+def compute_d_from_tmp(case_name, v_data, sigma_i=0.4, sigma_e=0.8, sigma_t=0.8, multi_flag=True):
+    mesh_file = f'forward_inverse_3d/data/mesh/mesh_{case_name}.msh'
+    geom_file = f'forward_inverse_3d/data/raw_data/geom_{case_name}.mat'
     u_f_data, u_functionspace = forward_tmp(mesh_file, v_data, sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t, multi_flag=multi_flag)
-    geom = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
+    geom = h5py.File(geom_file, 'r')
     points = np.array(geom['geom_thorax']['pts'])
     d_data = extract_data_from_function(u_f_data, u_functionspace, points)
     return d_data

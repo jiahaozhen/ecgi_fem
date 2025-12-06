@@ -1,15 +1,17 @@
 '''property of transfer matrix A (Au + Rv = 0)'''
 from dolfinx.io import gmshio
-from dolfinx.fem import functionspace, form, Function
+from dolfinx.fem import functionspace, form
 from dolfinx.fem.petsc import assemble_matrix
 import numpy as np
 from ufl import TestFunction, TrialFunction, dot, grad, Measure
 from mpi4py import MPI
 from utils.helper_function import petsc2array
-from utils.simulate_tools import build_M, build_Mi
+from utils.simulate_tools import build_M
 
 # mesh of Body
-file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
+case_name_list = ['normal_male', 'normal_male2', 'normal_young_male']
+case_name = case_name_list[0]
+file = f'forward_inverse_3d/data/mesh/mesh_{case_name}.msh'
 domain, cell_markers, facet_markers = gmshio.read_from_msh(file, MPI.COMM_WORLD, gdim=3)
 tdim = domain.topology.dim
 

@@ -6,7 +6,8 @@ from utils.transmembrane_potential_tools import get_activation_time_from_v
 
 if __name__ == "__main__":
     # 读取网格
-    mesh_file = r"forward_inverse_3d/data/mesh/mesh_ecgsim_sphere.msh"
+    case_name = 'normal_male[sphere]'
+    mesh_file = f"forward_inverse_3d/data/mesh/mesh_{case_name}.msh"
     step_per_timeframe = 16
 
     # 确认激活序列
@@ -28,7 +29,7 @@ if __name__ == "__main__":
                                                          tau_in_val=0.4)
 
     # 确认心电图
-    d_data = compute_d_from_tmp(mesh_file, v_data, multi_flag=False, allow_cache=False)
+    d_data = compute_d_from_tmp(case_name, v_data, multi_flag=False, allow_cache=False)
     act_time = get_activation_time_from_v(v_data) / step_per_timeframe
     
     import multiprocessing

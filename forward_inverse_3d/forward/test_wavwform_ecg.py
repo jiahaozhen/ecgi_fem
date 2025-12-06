@@ -4,17 +4,19 @@ from utils.visualize_tools import plot_bsp_on_standard12lead
 from utils.simulate_tools import get_activation_dict
 
 if __name__ == '__main__':
-    mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
+    case_name_list = ['normal_male', 'normal_male2', 'normal_young_male']
+    case_name = case_name_list[0]
+    mesh_file = f'forward_inverse_3d/data/mesh/mesh_{case_name}.msh'
     T = 500
     step_per_timeframe = 8
     
-    activation_dict = get_activation_dict(mesh_file, mode='IVS', threshold=60)
+    activation_dict = get_activation_dict(case_name, mode='IVS', threshold=40)
 
     v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file,
                                                          T=T,
                                                          step_per_timeframe=step_per_timeframe,
                                                          activation_dict_origin=activation_dict)
-    d_data = compute_d_from_tmp(mesh_file, v_data)
+    d_data = compute_d_from_tmp(case_name, v_data, allow_cache=True)
     
     plot_bsp_on_standard12lead(d_data,
                                step_per_timeframe=step_per_timeframe,

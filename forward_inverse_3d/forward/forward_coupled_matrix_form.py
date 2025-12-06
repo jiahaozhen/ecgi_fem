@@ -1,25 +1,21 @@
 from dolfinx.io import gmshio
-from dolfinx.fem import functionspace, form, Function
+from dolfinx.fem import functionspace, form
 from dolfinx.fem.petsc import assemble_matrix
 from dolfinx.mesh import create_submesh
 import numpy as np
 from ufl import TestFunction, TrialFunction, dot, grad, Measure
 from mpi4py import MPI
 import h5py
-from utils.simulate_tools import build_Mi, build_M, ischemia_condition
-from utils.function_tools import assign_function
-from utils.ventricular_segmentation_tools import distinguish_epi_endo
+from utils.simulate_tools import build_Mi, build_M
 
-def build_forward_matrix_coupled(mesh_file,
+def build_forward_matrix_coupled(case_name,
                                  sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
-                                 multi_flag=True, gdim=3,
-                                 center_ischemia=np.array([80.4, 19.7, -15.0]),
-                                 radius_ischemia=30,
-                                 ischemia_epi_endo=[-1]):
+                                 multi_flag=True, gdim=3):
     """
     Build transfer matrix M_transfer: (n_targets, ndofs_V2)
     Solves A u = -R[:, i] for each basis i of V2, then samples u at closest torso points.
     """
+    mesh_file = f'forward_inverse_3d/data/mesh/mesh_{case_name}.msh'
     # ------------- meshes & spaces -------------
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
     tdim = domain.topology.dim
@@ -30,22 +26,10 @@ def build_forward_matrix_coupled(mesh_file,
     V1 = functionspace(domain, ("Lagrange", 1))
     V2 = functionspace(subdomain_ventricle, ("Lagrange", 1))
 
-    # epicardium/mid/endocardium markers
-    epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
-    marker_function = Function(V2)
-    # assign_function expects values per mesh node or dof depending on implementation; keep your usage
-    assign_function(marker_function, np.arange(len(subdomain_ventricle.geometry.x)), epi_endo_marker)
-
-    condition = ischemia_condition(u_ischemia=1.0, u_healthy=0.0,
-                                   center=center_ischemia,
-                                   r=radius_ischemia,
-                                   marker_function=marker_function,
-                                   ischemia_epi_endo=ischemia_epi_endo)
-
-    Mi = build_Mi(subdomain_ventricle, condition, sigma_i=sigma_i,
+    Mi = build_Mi(subdomain_ventricle, condition=None, sigma_i=sigma_i,
                   scar=False,
                   ischemia=False)
-    M = build_M(domain, cell_markers, multi_flag=multi_flag, condition=condition,
+    M = build_M(domain, cell_markers, multi_flag=multi_flag, condition=None,
                 sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t,
                 scar=False,
                 ischemia=False)
@@ -84,7 +68,8 @@ def build_forward_matrix_coupled(mesh_file,
     A_mat.setNullSpace(nullspace)
 
     # ------------- target points and mapping -------------
-    geom = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
+    geom_file = f'forward_inverse_3d/data/raw_data/geom_{case_name.split("[")[0]}.mat'
+    geom = h5py.File(geom_file, 'r')
     # geom_thorax/pts shape can be (3,300) or (300,3) depending on mat file; normalize
     target_pts = np.array(geom['geom_thorax']['pts'])
     if target_pts.ndim == 2 and target_pts.shape[0] == 3 and target_pts.shape[1] != 3:
@@ -184,7 +169,7 @@ def build_forward_matrix_coupled(mesh_file,
     return M_transfer
 
 
-def forward_tmp(mesh_file, v_data,
+def forward_tmp(case_name, v_data,
                 sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
                 multi_flag=True, gdim=3, allow_cache=True):
     """
@@ -194,19 +179,20 @@ def forward_tmp(mesh_file, v_data,
       - 2D array (N_nodes, T)
       - 2D array (T, N_nodes) -> transposed automatically
     """
-    # 构建前向矩阵 (300 × Nheart)
-    file_path = 'forward_inverse_3d/data/' + mesh_file.split('/')[-1].replace('.msh', '_forward_matrix_coupled.npz')
+    file_path = 'forward_inverse_3d/data/forward_matrix/forward_matrix_coupled_' + case_name + '.npz'
     try:
         if not allow_cache:
             raise FileNotFoundError
+        import os
+        if not os.path.exists(file_path):
+            raise FileNotFoundError
         data = np.load(file_path)
         A_transfer_matrix = data['A']
-        print(f"Loaded precomputed forward matrix from {file_path}.", flush=True)
     except FileNotFoundError:
         print(f"Precomputed forward matrix not found at {file_path}, building anew...", flush=True)
 
         A_transfer_matrix = build_forward_matrix_coupled(
-            mesh_file,
+            case_name,
             sigma_i=sigma_i,
             sigma_e=sigma_e,
             sigma_t=sigma_t,
@@ -215,6 +201,7 @@ def forward_tmp(mesh_file, v_data,
         )
 
         if allow_cache:
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
             np.savez(file_path, A=A_transfer_matrix)
     
     A = np.asarray(A_transfer_matrix, dtype=float)  # (300, N_nodes)
@@ -259,11 +246,11 @@ def forward_tmp(mesh_file, v_data,
     return phi_body
 
 
-def compute_d_from_tmp(mesh_file, v_data,
+def compute_d_from_tmp(case_name, v_data,
                        sigma_i=0.4, sigma_e=0.8, sigma_t=0.8,
                        multi_flag=True, gdim=3,
                        allow_cache=False):
-    d_data = forward_tmp(mesh_file, v_data,
+    d_data = forward_tmp(case_name, v_data,
                          sigma_i=sigma_i, sigma_e=sigma_e, sigma_t=sigma_t,
                          multi_flag=multi_flag, gdim=gdim, allow_cache=allow_cache)
     # your original function returns transposed
