@@ -1,6 +1,7 @@
 '''
 测试 多次刺激电流对膜电位的影响
 '''
+
 import numpy as np
 import math
 import matplotlib.pyplot as plt
@@ -16,6 +17,7 @@ v_crit = 0.23
 v_rest = 0
 v_peak = 1
 
+
 # 多次刺激电流函数
 def J_stim_multi(t):
     stim_times = [(40, 50), (150, 250), (300, 330)]
@@ -24,15 +26,19 @@ def J_stim_multi(t):
             return 0.01
     return 0.0
 
+
 def odes(t, y, tau_open):
     v, h = y
-    J_in = (h * (v_peak - v) * (v - v_rest)**2) / tau_in
+    J_in = (h * (v_peak - v) * (v - v_rest) ** 2) / tau_in
     J_out = -(v - v_rest) / tau_out
     dv_dt = J_in + J_out + J_stim_multi(t)
     n_gate = 0.1
     h_inf = 0.5 * (1 - math.tanh((v - v_crit) / n_gate))
-    dh_dt = (1 / tau_close + (tau_close - tau_open) / tau_open / tau_close * h_inf) * (h_inf - h)
+    dh_dt = (1 / tau_close + (tau_close - tau_open) / tau_open / tau_close * h_inf) * (
+        h_inf - h
+    )
     return [dv_dt, dh_dt]
+
 
 # 初始条件与时间设置
 v0 = v_rest + 0.001

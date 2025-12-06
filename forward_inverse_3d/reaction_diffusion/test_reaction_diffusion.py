@@ -1,13 +1,17 @@
 import time
-import numpy as np
-from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import compute_v_based_on_reaction_diffusion
+from forward_inverse_3d.reaction_diffusion.simulate_reaction_diffusion import (
+    compute_v_based_on_reaction_diffusion,
+)
 from utils.visualize_tools import plot_v_random
 from utils.simulate_tools import get_activation_dict
 
 if __name__ == "__main__":
-    mesh_file = r'forward_inverse_3d/data/mesh_multi_conduct_ecgsim.msh'
+    case_name_list = ['normal_male', 'normal_male2', 'normal_young_male']
+    case_name = case_name_list[0]
+    mesh_file = f'forward_inverse_3d/data/mesh/mesh_{case_name}.msh'
     step_per_timeframe = 4
-    
+
+    # import numpy as np
     # activation_dict = {
     #     8 : np.array([57, 51.2, 15]),
     #     14.4 : np.array([30.2, 45.2, -30]),
@@ -18,14 +22,16 @@ if __name__ == "__main__":
     #     45.6 : np.array([48.4, 40.2, -37.5])
     # }
 
-    activation_dict = get_activation_dict(mesh_file, threshold=40)
+    activation_dict = get_activation_dict(case_name, threshold=40)
 
     start_time = time.time()
-    v_data, _, _ = compute_v_based_on_reaction_diffusion(mesh_file, 
-                                                         ischemia_flag=True, 
-                                                         T=500, 
-                                                         step_per_timeframe=step_per_timeframe,
-                                                         activation_dict_origin=activation_dict)
+    v_data, _, _ = compute_v_based_on_reaction_diffusion(
+        mesh_file,
+        ischemia_flag=True,
+        T=500,
+        step_per_timeframe=step_per_timeframe,
+        activation_dict_origin=activation_dict,
+    )
     end_time = time.time()
     print(f"Simulation time: {end_time - start_time} seconds")
     plot_v_random(v_data, step_per_timeframe=step_per_timeframe)

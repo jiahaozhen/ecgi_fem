@@ -8,25 +8,45 @@ from petsc4py import PETSc
 import numpy as np
 from utils.function_tools import assign_function
 from utils.ventricular_segmentation_tools import distinguish_epi_endo
-from utils.simulate_tools import build_tau_close, build_tau_in, build_D, get_activation_dict, ischemia_condition
+from utils.simulate_tools import (
+    build_tau_close,
+    build_tau_in,
+    build_D,
+    ischemia_condition,
+)
 
-def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
-                                          ischemia_flag=False, scar_flag=False,
-                                          center_ischemia=np.array([80.4, 19.7, -15.0]), 
-                                          radius_ischemia=30,
-                                          ischemia_epi_endo=[-1],
-                                          u_peak_ischemia_val=0.9, u_rest_ischemia_val=0.1,
-                                          T=500, step_per_timeframe=4,
-                                          v_min=-90, v_max=10,
-                                          tau_close_vary=True,
-                                          affect_D=True, affect_tau_in=True, affect_tau_close=True,
-                                          activation_dict_origin=None,
-                                          stim_radius=5.0, stim_strength=0.5,
-                                          tau_close_endo=100, tau_close_mid=100,
-                                          tau_close_epi=95, tau_close_shift=20,
-                                          tau_in_val=0.4, tau_in_ischemia=1,
-                                          D_val=1e-1, D_val_ischemia=5e-2, D_val_scar=0
-                                          ):
+
+def compute_v_based_on_reaction_diffusion(
+    mesh_file,
+    gdim=3,
+    ischemia_flag=False,
+    scar_flag=False,
+    center_ischemia=np.array([80.4, 19.7, -15.0]),
+    radius_ischemia=30,
+    ischemia_epi_endo=[-1],
+    u_peak_ischemia_val=0.9,
+    u_rest_ischemia_val=0.1,
+    T=500,
+    step_per_timeframe=4,
+    v_min=-90,
+    v_max=10,
+    tau_close_vary=True,
+    affect_D=True,
+    affect_tau_in=True,
+    affect_tau_close=True,
+    activation_dict_origin=None,
+    stim_radius=5.0,
+    stim_strength=0.5,
+    tau_close_endo=100,
+    tau_close_mid=100,
+    tau_close_epi=95,
+    tau_close_shift=20,
+    tau_in_val=0.4,
+    tau_in_ischemia=1,
+    D_val=1e-1,
+    D_val_ischemia=5e-2,
+    D_val_scar=0,
+):
     '''
     ischemia affect to D tau_close tau_in
     '''
@@ -41,39 +61,51 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     t = 0
     num_steps = T * step_per_timeframe
     dt = T / num_steps  # time step size
-    
+
     # 1 is epicardium, 0 is mid-myocardial, -1 is endocardium
     epi_endo_marker = distinguish_epi_endo(mesh_file, gdim=gdim)
     marker_function = Function(V)
-    assign_function(marker_function, np.arange(len(subdomain_ventricle.geometry.x)), epi_endo_marker)
+    assign_function(
+        marker_function, np.arange(len(subdomain_ventricle.geometry.x)), epi_endo_marker
+    )
 
-    condition = ischemia_condition(u_ischemia=1.0, u_healthy=0.0,
-                                   center=center_ischemia,
-                                   r=radius_ischemia,
-                                   marker_function=marker_function,
-                                   ischemia_epi_endo=ischemia_epi_endo)
-    
-    D = build_D(V_piecewise, 
-                condition=condition, 
-                scar=scar_flag and affect_D, 
-                ischemia=ischemia_flag and affect_D,
-                D_val=D_val, 
-                D_val_ischemia=D_val_ischemia, 
-                D_val_scar=D_val_scar)
+    condition = ischemia_condition(
+        u_ischemia=1.0,
+        u_healthy=0.0,
+        center=center_ischemia,
+        r=radius_ischemia,
+        marker_function=marker_function,
+        ischemia_epi_endo=ischemia_epi_endo,
+    )
+
+    D = build_D(
+        V_piecewise,
+        condition=condition,
+        scar=scar_flag and affect_D,
+        ischemia=ischemia_flag and affect_D,
+        D_val=D_val,
+        D_val_ischemia=D_val_ischemia,
+        D_val_scar=D_val_scar,
+    )
     tau_out = 10
     tau_open = 130
-    tau_close = build_tau_close(marker_function, 
-                                condition, 
-                                ischemia=ischemia_flag and affect_tau_close, 
-                                vary=tau_close_vary,
-                                tau_close_endo=tau_close_endo,
-                                tau_close_mid=tau_close_mid,
-                                tau_close_epi=tau_close_epi,
-                                tau_close_shift=tau_close_shift)
-    tau_in = build_tau_in(V, 
-                          condition, 
-                          ischemia=ischemia_flag and affect_tau_in,
-                          tau_in_val=tau_in_val, tau_in_ischemia=tau_in_ischemia)
+    tau_close = build_tau_close(
+        marker_function,
+        condition,
+        ischemia=ischemia_flag and affect_tau_close,
+        vary=tau_close_vary,
+        tau_close_endo=tau_close_endo,
+        tau_close_mid=tau_close_mid,
+        tau_close_epi=tau_close_epi,
+        tau_close_shift=tau_close_shift,
+    )
+    tau_in = build_tau_in(
+        V,
+        condition,
+        ischemia=ischemia_flag and affect_tau_in,
+        tau_in_val=tau_in_val,
+        tau_in_ischemia=tau_in_ischemia,
+    )
     u_crit = 0.13
 
     u_peak = Function(V)
@@ -87,7 +119,7 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         condition.u_ischemia = u_peak_ischemia_val
         condition.u_healthy = 1.0
         u_peak.interpolate(condition)
-        
+
         condition.u_ischemia = u_rest_ischemia_val
         condition.u_healthy = 0.0
         u_rest.interpolate(condition)
@@ -103,17 +135,29 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         uh.interpolate(lambda x: np.full(x.shape[1], 0))
 
     if isinstance(u_peak, Function):
-        ischemia_marker = np.where(np.abs(u_peak.x.array - u_peak_ischemia_val) < 1e-3, 1, 0)
+        ischemia_marker = np.where(
+            np.abs(u_peak.x.array - u_peak_ischemia_val) < 1e-3, 1, 0
+        )
     else:
         ischemia_marker = np.full(u_n.x.array.shape, 0)
 
-    v_n.interpolate(lambda x : np.full(x.shape[1], 1))
-    
+    v_n.interpolate(lambda x: np.full(x.shape[1], 1))
+
     dx1 = Measure("dx", domain=subdomain_ventricle)
     u, v = TrialFunction(V), TestFunction(V)
     a_u = u * v * dx1 + dt * D * dot(grad(u), grad(v)) * dx1
-    L_u = u_n * v * dx1 + dt * (v_n * (u_peak - u_n) * (u_n - u_rest) * (u_n - u_rest) / tau_in - (u_n - u_rest) / tau_out  + J_stim) * v * dx1
-    
+    L_u = (
+        u_n * v * dx1
+        + dt
+        * (
+            v_n * (u_peak - u_n) * (u_n - u_rest) * (u_n - u_rest) / tau_in
+            - (u_n - u_rest) / tau_out
+            + J_stim
+        )
+        * v
+        * dx1
+    )
+
     bilinear_form = form(a_u)
     linear_form_u = form(L_u)
 
@@ -124,14 +168,14 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
     solver.setType("cg")  # 改为共轭梯度法
     solver.getPC().setType("gamg")  # 或 "ilu", "gamg"
     solver.setTolerances(rtol=1e-6)
-    
+
     b_u = create_vector(linear_form_u)
 
-    
     if activation_dict_origin is None:
-        activation_dict_origin = get_activation_dict(mesh_file)
-        
+        raise ValueError("activation_dict_origin must be provided.")
+
     from collections import defaultdict
+
     activation_dict = defaultdict(list)
 
     for k, v in activation_dict_origin.items():
@@ -169,7 +213,9 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
                 center_coords = activation_dict[key]  # Now a list of coordinates
 
                 # interpolate 要求返回每个查询点的值（x 的形状为 (gdim, npoints)）
-                def stim_indicator(x, centers=center_coords, r=stim_radius, s=stim_strength):
+                def stim_indicator(
+                    x, centers=center_coords, r=stim_radius, s=stim_strength
+                ):
                     pts = x.T  # (npoints, gdim)
                     centers_arr = np.array(centers)  # (ncenters, gdim)
                     diff = pts[:, None, :] - centers_arr[None, :, :]
@@ -202,13 +248,17 @@ def compute_v_based_on_reaction_diffusion(mesh_file, gdim=3,
         # lock_mask = activated & (t - activation_time >= 5)
         # uh.x.array[lock_mask & (uh.x.array > u_n.x.array)] = u_n.x.array[lock_mask & (uh.x.array > u_n.x.array)]
 
-         # 更新v_n和u_n
+        # 更新v_n和u_n
         u_n.x.array[:] = uh.x.array
-        v_n.x.array[:] = v_n.x.array + dt * np.where(u_n.x.array < u_crit, (1 - v_n.x.array) / tau_open, -v_n.x.array / tau_close.x.array)
+        v_n.x.array[:] = v_n.x.array + dt * np.where(
+            u_n.x.array < u_crit,
+            (1 - v_n.x.array) / tau_open,
+            -v_n.x.array / tau_close.x.array,
+        )
 
         u_data.append(u_n.x.array.copy())
 
     u_data = np.array(u_data)
     u_data = u_data * (v_max - v_min) + v_min
-    
+
     return u_data, ischemia_marker, V
