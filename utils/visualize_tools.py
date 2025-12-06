@@ -95,6 +95,64 @@ def plot_val_on_domain(domain, val, name="val", tdim=3, title="Value on Domain")
     plotter.add_axes()
     plotter.show(auto_close=False)
 
+def compare_bsp_on_standard12lead(*bsp_datas, 
+                                 case_name='normal_male',
+                                 labels=None, 
+                                 step_per_timeframe=4,
+                                 filter_flag=True,
+                                 filter_window_size=50):
+
+    standard12Leads = [transfer_bsp_to_standard12lead(bsp_data, case_name) for bsp_data in bsp_datas]
+    compare_standard_12_lead(*standard12Leads,
+                             labels=labels,
+                             step_per_timeframe=step_per_timeframe,
+                             filter_flag=filter_flag,
+                             filter_window_size=filter_window_size)
+
+
+def compare_standard_12_lead(*standard12Leads, 
+                             labels=None, 
+                             step_per_timeframe=4, 
+                             filter_flag=True,
+                             filter_window_size=50):
+    if filter_flag:
+        standard12Leads = [smooth_ecg_mean(data, window_size=filter_window_size) for data in standard12Leads]
+
+    fig, axs = plt.subplots(4, 3, figsize=(15, 10))
+    leads = [
+        "lead I", "lead II", "lead III", "lead V1", "lead V2", "lead V3",
+        "lead V4", "lead V5", "lead V6", "lead aVR", "lead aVL", "lead aVF"
+    ]
+
+    time = np.arange(0, standard12Leads[0].shape[0] / step_per_timeframe, 1 / step_per_timeframe)
+    for i, ax in enumerate(axs.flat):
+        for idx, data in enumerate(standard12Leads):
+            label = labels[idx] if labels and idx < len(labels) else f"Data {idx + 1}"
+            linestyle = '-' if idx == 0 else '--'
+            ax.plot(time, data[:, i], linestyle=linestyle, label=label)
+        ax.set_title(leads[i])
+        ax.set_xlabel('Time (ms)')
+        ax.set_ylabel('Potential (mV)')
+        ax.legend()
+        ax.grid(True)
+
+    fig.suptitle('Comparison of 12-lead ECG', fontsize=16)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.show()
+
+
+def plot_bsp_on_standard12lead(bsp_data, 
+                               case_name='normal_male',
+                               step_per_timeframe=4,
+                               filter_flag=True,
+                               filter_window_size=50):
+    standard12Lead = transfer_bsp_to_standard12lead(bsp_data, case_name=case_name)
+    plot_standard_12_lead(standard12Lead, 
+                          step_per_timeframe=step_per_timeframe,
+                          filter_flag=filter_flag,
+                          filter_window_size=filter_window_size
+                          )
+    
 def plot_standard_12_lead(standard12Lead, 
                           step_per_timeframe=4, 
                           filter_flag=True, 
@@ -136,61 +194,6 @@ def plot_standard_12_lead(standard12Lead,
     fig.suptitle("12-lead ECG", fontsize=16)
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
-
-def compare_standard_12_lead(*standard12Leads, 
-                             labels=None, 
-                             step_per_timeframe=4, 
-                             filter_flag=True,
-                             filter_window_size=50):
-    if filter_flag:
-        standard12Leads = [smooth_ecg_mean(data, window_size=filter_window_size) for data in standard12Leads]
-
-    fig, axs = plt.subplots(4, 3, figsize=(15, 10))
-    leads = [
-        "lead I", "lead II", "lead III", "lead V1", "lead V2", "lead V3",
-        "lead V4", "lead V5", "lead V6", "lead aVR", "lead aVL", "lead aVF"
-    ]
-
-    time = np.arange(0, standard12Leads[0].shape[0] / step_per_timeframe, 1 / step_per_timeframe)
-    for i, ax in enumerate(axs.flat):
-        for idx, data in enumerate(standard12Leads):
-            label = labels[idx] if labels and idx < len(labels) else f"Data {idx + 1}"
-            linestyle = '-' if idx == 0 else '--'
-            ax.plot(time, data[:, i], linestyle=linestyle, label=label)
-        ax.set_title(leads[i])
-        ax.set_xlabel('Time (ms)')
-        ax.set_ylabel('Potential (mV)')
-        ax.legend()
-        ax.grid(True)
-
-    fig.suptitle('Comparison of 12-lead ECG', fontsize=16)
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    plt.show()
-
-def compare_bsp_on_standard12lead(*bsp_datas, 
-                                 lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1, 
-                                 labels=None, 
-                                 step_per_timeframe=4,
-                                 filter_flag=True,
-                                 filter_window_size=50):
-    standard12Leads = [transfer_bsp_to_standard12lead(bsp_data, lead_index) for bsp_data in bsp_datas]
-    compare_standard_12_lead(*standard12Leads,
-                             labels=labels,
-                             step_per_timeframe=step_per_timeframe,
-                             filter_flag=filter_flag,
-                             filter_window_size=filter_window_size)
-
-def plot_bsp_on_standard12lead(bsp_data, 
-                               lead_index=np.array([19, 26, 65, 41, 48, 54, 1, 2, 66]) - 1, 
-                               step_per_timeframe=4,
-                               filter_flag=True,
-                               filter_window_size=50):
-    standard12Lead = transfer_bsp_to_standard12lead(bsp_data, lead_index)
-    plot_standard_12_lead(standard12Lead, 
-                          step_per_timeframe=step_per_timeframe,
-                          filter_flag=filter_flag,
-                          filter_window_size=filter_window_size
-                          )
 
 def plot_v_random(v_data, step_per_timeframe=4):
     num_v = v_data.shape[1]  # 获取 v 的数量

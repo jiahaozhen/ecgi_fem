@@ -254,11 +254,15 @@ def build_M(domain: Mesh,
     return M
 
 
-def get_activation_dict(mesh_file, target_marker=2, gdim=3, mode='ENDO', threshold=100):
+def get_activation_dict(case_name, target_marker=2, gdim=3, mode='ENDO', threshold=100):
 
     from dolfinx.io import gmshio
     from mpi4py import MPI
     from dolfinx.mesh import create_submesh
+
+    mesh_file = f'forward_inverse_3d/data/mesh/mesh_{case_name}.msh'
+    geom_file = f'forward_inverse_3d/data/raw_data/geom_{case_name}.mat'
+    activation_file = f'forward_inverse_3d/data/raw_data/activation_times_{case_name}.mat'
 
     # mesh of Body
     domain, cell_markers, _ = gmshio.read_from_msh(mesh_file, MPI.COMM_WORLD, gdim=gdim)
@@ -267,10 +271,10 @@ def get_activation_dict(mesh_file, target_marker=2, gdim=3, mode='ENDO', thresho
     subdomain_ventricle, _, _, _ = create_submesh(domain, tdim, cell_markers.find(target_marker))
 
     import h5py
-    geom = h5py.File(r'forward_inverse_3d/data/geom_ecgsim.mat', 'r')
+    geom = h5py.File(geom_file, 'r')
     ventricle_pts = np.array(geom['geom_ventricle']['pts'])
 
-    activation_times = h5py.File(r'forward_inverse_3d/data/activation_times_ecgsim.mat', 'r')
+    activation_times = h5py.File(activation_file, 'r')
     activation = np.array(activation_times['dep']).reshape(-1)
 
     assert ventricle_pts.shape[0] == activation.shape[0], \
@@ -294,7 +298,7 @@ def get_activation_dict(mesh_file, target_marker=2, gdim=3, mode='ENDO', thresho
         target_coords = subdomain_ventricle.geometry.x[endo_idx, :]
     elif mode == 'IVS':
         from utils.ventricular_segmentation_tools import get_IVS_region
-        _, ivs_points, _, _ = get_IVS_region(mesh_file, gdim=gdim, threshold=24)
+        _, ivs_points, _, _ = get_IVS_region(mesh_file, gdim=gdim, threshold=9)
         target_coords = ivs_points
     else:
         target_coords = None
